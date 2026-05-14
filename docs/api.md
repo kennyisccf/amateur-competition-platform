@@ -1,33 +1,49 @@
-# 接口文档
+# 乐赛平台接口说明文档 (API)
 
-## 用户模块
+## 全局规范
+* **基础路径:** `http://localhost:8000/api`
+* **请求头:** 所有需要鉴权的接口，均需要在 Header 中携带 `Authorization: Bearer <your_jwt_token>`
+* **全局返回格式:**
+    ```json
+    {
+      "code": 200,
+      "message": "success",
+      "data": {}
+    }
+    ```
 
-### 用户登录
-请求地址：/api/user/login  
-请求方式：POST  
+---
 
-### 用户注册
-请求地址：/api/user/register  
-请求方式：POST  
+## 1. 用户模块 (User)
 
-## 赛事模块
+### 1.1 用户登录
+* **请求地址:** `/users/login/`
+* **请求方式:** `POST`
+* **功能说明:** 参赛选手、主办方或管理员登录获取 JWT Token。
 
-### 获取赛事列表
-请求地址：/api/competition/list  
-请求方式：GET  
+**请求参数:**
+| 参数名 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| username | String | 是 | 用户名 |
+| password | String | 是 | 密码 |
 
-### 创建赛事
-请求地址：/api/competition/create  
-请求方式：POST  
+**返回结果 (data 字段):**
+| 字段名 | 类型 | 说明 |
+|---|---|---|
+| access | String | JWT 访问令牌 |
+| refresh | String | JWT 刷新令牌 |
+| role | String | 用户角色 (PLAYER, ORGANIZER, ADMIN) |
+| user_id | Integer | 用户唯一 ID |
 
-## 报名模块
-
-### 赛事报名
-请求地址：/api/registration/create  
-请求方式：POST  
-
-## 管理员模块
-
-### 审核赛事
-请求地址：/api/admin/audit  
-请求方式：POST  
+**响应示例:**
+```json
+{
+  "code": 200,
+  "message": "登录成功",
+  "data": {
+    "access": "eyJhbGciOiJIUz...",
+    "refresh": "eyJhbGciOiJIUz...",
+    "role": "PLAYER",
+    "user_id": 1001
+  }
+}
