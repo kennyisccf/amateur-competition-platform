@@ -1,8 +1,9 @@
 <template>
-  <div class="login-container">
-    <div class="login-left">
-      <h1 class="login-title">乐赛</h1>
-      <p class="login-desc">一站式赛事服务平台 · 精彩有你</p>
+  <div class="register-container">
+    <!-- 左侧品牌区域 -->
+    <div class="register-left">
+      <h1 class="register-title">乐赛</h1>
+      <p class="register-desc">一站式赛事服务平台 · 精彩有你</p>
       <div class="tag-group">
         <el-tag>多元赛事</el-tag>
         <el-tag>全民参与</el-tag>
@@ -10,65 +11,118 @@
       </div>
     </div>
 
-    <div class="login-card">
-      <h2 class="card-title">用户注册</h2>
-      <p class="card-sub">填写信息，注册赛事平台账号</p>
+    <!-- 右侧注册卡片 -->
+    <div class="register-card">
+      <h2 class="card-title">欢迎注册</h2>
+      <p class="card-sub">请填写信息完成注册</p>
 
-      <el-form :model="registerForm" class="login-form">
+      <!-- 原生form表单 -->
+      <form method="post" action="/register" class="register-form">
         <el-form-item>
-          <el-input v-model="registerForm.username" placeholder="请设置用户名" />
+          <el-input
+            type="text"
+            name="username"
+            v-model="registerForm.username"
+            placeholder="请输入用户名"
+            required
+          />
         </el-form-item>
         <el-form-item>
-          <el-input v-model="registerForm.password" type="password" placeholder="请设置密码" />
+          <el-input
+            type="password"
+            name="password"
+            v-model="registerForm.password"
+            placeholder="请输入密码"
+            required
+          />
         </el-form-item>
         <el-form-item>
-          <el-input v-model="registerForm.repwd" type="password" placeholder="请再次确认密码" />
-        </el-form-item>
-        <el-form-item>
-          <el-select v-model="registerForm.role" placeholder="请选择您的角色">
-            <el-option label="参赛选手" value="选手" />
-            <el-option label="赛事主办方" value="主办方" />
-          </el-select>
+          <el-input
+            type="password"
+            name="password2"
+            v-model="registerForm.password2"
+            placeholder="请再次输入密码"
+            required
+          />
         </el-form-item>
 
-        <el-form-item>
-          <el-button type="primary" class="login-btn" @click="handleRegister">立即注册</el-button>
-        </el-form-item>
-      </el-form>
+        <!-- 验证码行 -->
+        <div class="code-row">
+          <el-input v-model="registerForm.code" placeholder="图形验证码" />
+          <div class="code-box" @click="getCaptcha">{{ captcha }}</div>
+        </div>
 
-      <div class="login-footer">
-        已有账户？
-        <router-link to="/login">返回登录</router-link>
+        <el-form-item>
+          <el-button type="primary" class="register-btn" native-type="submit">注册</el-button>
+        </el-form-item>
+      </form>
+
+      <!-- 后端错误/成功信息 -->
+      <div class="tip" :class="tipClass" v-if="tipMsg">{{ tipMsg }}</div>
+
+      <!-- 底部链接 -->
+      <div class="register-footer">
+        <span>已有账户？</span>
+        <router-link to="/login">立即登录</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
 
-const router = useRouter()
 const registerForm = ref({
   username: '',
   password: '',
-  repwd: '',
-  role: ''
+  password2: '',
+  code: ''
 })
+const captcha = ref('')
+const tipMsg = ref('')
+const tipClass = ref('')
 
-const handleRegister = () => {
-  if (registerForm.password !== registerForm.repwd) {
-    ElMessage.warning('两次密码输入不一致')
+// 生成验证码
+const getCaptcha = () => {
+  const str = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let res = ''
+  for (let i = 0; i < 4; i++) {
+    res += str[Math.floor(Math.random() * 36)]
+  }
+  captcha.value = res
+}
+
+// 表单提交前校验
+const beforeSubmit = (e) => {
+  const { username, password, password2, code } = registerForm.value
+  if (!username || !password || !password2) {
+    ElMessage.warning('请输入完整信息')
+    e.preventDefault()
     return
   }
-  ElMessage.success('注册成功，请前往登录')
-  router.push('/login')
+  if (password !== password2) {
+    ElMessage.error('两次密码不一致')
+    getCaptcha()
+    e.preventDefault()
+    return
+  }
+  if (code.toUpperCase() !== captcha.value) {
+    ElMessage.error('验证码错误')
+    getCaptcha()
+    e.preventDefault()
+    return
+  }
 }
+
+onMounted(() => {
+  getCaptcha()
+  document.querySelector('form.register-form').addEventListener('submit', beforeSubmit)
+})
 </script>
 
 <style scoped>
-.login-container {
+.register-container {
   width: 100vw;
   height: 100vh;
   background: linear-gradient(135deg, #1a3a4a, #244757);
@@ -77,15 +131,17 @@ const handleRegister = () => {
   justify-content: space-between;
   padding: 0 120px;
 }
-.login-left {
+
+/* 左侧品牌 */
+.register-left {
   color: #fff;
 }
-.login-title {
-  font-size: 60px;
+.register-title {
+  font-size: 46px;
   font-weight: 600;
   margin-bottom: 16px;
 }
-.login-desc {
+.register-desc {
   font-size: 18px;
   opacity: 0.8;
   margin-bottom: 30px;
@@ -94,7 +150,9 @@ const handleRegister = () => {
   display: flex;
   gap: 12px;
 }
-.login-card {
+
+/* 右侧注册卡片 */
+.register-card {
   width: 420px;
   padding: 40px 30px;
   background: #fff;
@@ -111,17 +169,59 @@ const handleRegister = () => {
   font-size: 14px;
   margin-bottom: 24px;
 }
-.login-btn {
+
+.register-form {
+  gap: 12px;
+}
+
+/* 验证码行 */
+.code-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.code-row .el-input {
+  flex: 1;
+}
+.code-box {
+  width: 120px;
+  height: 40px;
+  background: #f0f2f5;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.register-btn {
   width: 100%;
   height: 44px;
   font-size: 16px;
 }
-.login-footer {
+
+.tip {
+  text-align: center;
+  margin-top: 8px;
+}
+.tip.error {
+  color: #ff4d4f;
+}
+.tip.success {
+  color: #52c41a;
+}
+
+.register-footer {
   text-align: center;
   font-size: 13px;
   color: #666;
+  margin-top: 16px;
 }
-.login-footer a {
+.register-footer a {
   color: #4080ff;
   text-decoration: none;
 }

@@ -23,25 +23,44 @@
         <el-radio-button label="管理员" />
       </el-radio-group>
 
-      <!-- 登录表单 -->
-      <el-form :model="loginForm" class="login-form">
+      <!-- 原生 form，完全匹配后端接口 -->
+      <form method="post" action="/login" class="login-form" @submit="beforeSubmit">
+        <!-- 手动添加 CSRF token 隐藏字段（从 Cookie 读取） -->
+        <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
+
         <el-form-item>
-          <el-input v-model="loginForm.username" placeholder="请输入用户名" />
-        </el-form-item>
-        <el-form-item>
-          <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" />
+          <el-input
+            type="text"
+            name="username"
+            v-model="loginForm.username"
+            placeholder="请输入用户名"
+            required
+          />
         </el-form-item>
 
-        <!-- 验证码行 -->
+        <el-form-item>
+          <el-input
+            type="password"
+            name="password"
+            v-model="loginForm.password"
+            placeholder="请输入密码"
+            required
+          />
+        </el-form-item>
+
+        <!-- 验证码行（前端模拟） -->
         <div class="code-row">
           <el-input v-model="loginForm.code" placeholder="图形验证码" />
-          <div class="code-box">{{ captcha }}</div>
+          <div class="code-box" @click="getCaptcha">{{ captcha }}</div>
         </div>
 
         <el-form-item>
-          <el-button type="primary" class="login-btn" @click="handleLogin">立即登录</el-button>
+          <el-button type="primary" class="login-btn" native-type="submit">登录</el-button>
         </el-form-item>
-      </el-form>
+      </form>
+
+      <!-- 后端错误信息：从 window.__ERROR_MSG__ 读取 -->
+      <div class="error-tip" v-if="backendError">{{ backendError }}</div>
 
       <!-- 底部链接 -->
       <div class="login-footer">
@@ -57,18 +76,17 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
-// 选中角色
 const userRole = ref('选手')
-// 登录表单数据
 const loginForm = ref({
   username: '',
   password: '',
   code: ''
 })
-// 随机验证码
 const captcha = ref('')
+const backendError = ref('')
+const csrfToken = ref('')
 
-// 生成随机4位验证码
+// 生成验证码
 const getCaptcha = () => {
   const str = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   let res = ''
@@ -78,27 +96,46 @@ const getCaptcha = () => {
   captcha.value = res
 }
 
-// 登录提交
-const handleLogin = () => {
-  if (!loginForm.username || !loginForm.password) {
+// 获取 CSRF Token（从 Cookie 中读取）
+const getCookie = (name) => {
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) return parts.pop().split(';').shift()
+  return ''
+}
+
+// 表单提交前校验
+const beforeSubmit = (e) => {
+  const uname = loginForm.value.username.trim()
+  const pwd = loginForm.value.password.trim()
+  const code = loginForm.value.code.trim()
+
+  if (!uname || !pwd) {
     ElMessage.warning('请输入账号密码')
+    e.preventDefault()
     return
   }
-  if (loginForm.code.toUpperCase() !== captcha.value) {
+  if (code.toUpperCase() !== captcha.value) {
     ElMessage.error('验证码错误')
     getCaptcha()
+    e.preventDefault()
     return
   }
-  // 后续这里对接登录接口 + 路由跳转首页
-  ElMessage.success('登录成功')
+  // 校验通过，表单自然提交（POST /login），页面会刷新
 }
 
 onMounted(() => {
   getCaptcha()
+  csrfToken.value = getCookie('csrftoken')   // 根据后端实际 Cookie 名称调整
+  // 从后端注入的全局变量中读取错误信息
+  if (window.__ERROR_MSG__) {
+    backendError.value = window.__ERROR_MSG__
+  }
 })
 </script>
 
 <style scoped>
+/* 你的原有样式，完全不变 */
 .login-container {
   width: 100vw;
   height: 100vh;
@@ -109,7 +146,6 @@ onMounted(() => {
   padding: 0 120px;
 }
 
-/* 左侧品牌 */
 .login-left {
   color: #fff;
 }
@@ -128,14 +164,13 @@ onMounted(() => {
   gap: 12px;
 }
 
-/* 右侧登录卡片 */
 .login-card {
   width: 420px;
   padding: 40px 30px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  margin-right:300px;
+  margin-right: 300px;
 }
 .card-title {
   font-size: 24px;
@@ -152,13 +187,15 @@ onMounted(() => {
   width: 100%;
 }
 .login-form {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-/* 验证码行 */
 .code-row {
   display: flex;
   gap: 12px;
+  margin-bottom: 12px;
 }
 .code-row .el-input {
   flex: 1;
@@ -184,10 +221,17 @@ onMounted(() => {
   font-size: 16px;
 }
 
+.error-tip {
+  color: #ff4d4f;
+  text-align: center;
+  margin-top: 8px;
+}
+
 .login-footer {
   text-align: center;
   font-size: 13px;
   color: #666;
+  margin-top: 16px;
 }
 .login-footer a {
   color: #4080ff;
