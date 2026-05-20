@@ -26,6 +26,14 @@
             <el-icon><User /></el-icon>
             <span>我的运动档案</span>
           </el-menu-item>
+          <el-menu-item index="/event-detail">
+            <el-icon><InfoFilled /></el-icon>
+            <span>赛事详情</span>
+          </el-menu-item>
+          <el-menu-item index="/event-register">
+            <el-icon><Edit /></el-icon>
+            <span>赛事报名</span>
+          </el-menu-item>
         </el-menu>
       </div>
 
@@ -59,7 +67,7 @@
 </template>
 
 <script setup>
-import { Trophy, User, Plus, Tools } from '@element-plus/icons-vue'
+import { Trophy, User, Plus, Tools, InfoFilled, Edit } from '@element-plus/icons-vue'
 </script>
 
 <style scoped>
