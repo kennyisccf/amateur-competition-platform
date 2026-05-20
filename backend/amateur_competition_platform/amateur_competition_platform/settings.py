@@ -76,7 +76,7 @@ WSGI_APPLICATION = "amateur_competition_platform.wsgi.application"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'lesai',
+        'NAME': 'lesai_db',
         'USER': 'root',
         'PASSWORD': 's08006172',
         'HOST': '127.0.0.1',

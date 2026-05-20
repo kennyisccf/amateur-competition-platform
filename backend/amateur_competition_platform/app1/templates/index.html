@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>体育赛事管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+        }
+        .header {
+            background: #007BFF;
+            color: white;
+            padding: 16px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 22px;
+        }
+        .nav a {
+            color: white;
+            margin-left: 20px;
+            text-decoration: none;
+        }
+        .filter-box {
+            background: white;
+            padding: 20px 30px;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.08);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .filter-box select,
+        .filter-box button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .filter-box button {
+            background: #007BFF;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        .container {
+            margin: 0 20px;
+        }
+        .event-card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.05);
+        }
+        .event-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .event-card .info {
+            color: #666;
+            font-size: 14px;
+            margin: 6px 0;
+        }
+        .label {
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<div class="header">
+    <h1>体育赛事管理系统</h1>
+    <div class="nav">
+        <a href="/">首页</a>
+        <a href="/login/">登录</a>
+        <a href="/register/">注册</a>
+    </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-box">
+    <form method="get" style="display:flex;gap:15px;">
+        <select name="type">
+            <option value="">全部类型</option>
+            <option value="PUBLIC" {% if type == 'PUBLIC' %}selected{% endif %}>公开积分赛</option>
+            <option value="PRIVATE" {% if type == 'PRIVATE' %}selected{% endif %}>私人赛</option>
+        </select>
+
+        <select name="status">
+            <option value="">全部状态</option>
+            <option value="0" {% if status == '0' %}selected{% endif %}>待审核</option>
+            <option value="1" {% if status == '1' %}selected{% endif %}>报名中</option>
+            <option value="2" {% if status == '2' %}selected{% endif %}>进行中</option>
+            <option value="3" {% if status == '3' %}selected{% endif %}>已结束</option>
+        </select>
+
+        <button type="submit">筛选</button>
+    </form>
+</div>
+
+<!-- 赛事列表 -->
+<div class="container">
+    {% for comp in competitions %}
+    <div class="event-card">
+        <h3>{{ comp.title }}</h3>
+        <div class="info">
+            <span class="label">类型：</span>
+            {% if comp.type == 'PUBLIC' %}公开积分赛{% else %}私人赛{% endif %}
+        </div>
+        <div class="info">
+            <span class="label">状态：</span>
+            {% if comp.status == 0 %}待审核
+            {% elif comp.status == 1 %}报名中
+            {% elif comp.status == 2 %}进行中
+            {% else %}已结束{% endif %}
+        </div>
+        <div class="info">
+            <span class="label">人数：</span>{{ comp.current_participants }} / {{ comp.max_participants }}
+        </div>
+        <div class="info">
+            <span class="label">时间：</span>{{ comp.start_time|date:"Y-m-d H:i" }} ~ {{ comp.end_time|date:"Y-m-d H:i" }}
+        </div>
+        {% if comp.description %}
+        <div class="info">
+            <span class="label">介绍：</span>{{ comp.description }}
+        </div>
+        {% endif %}
+    </div>
+    {% empty %}
+    <div style="text-align:center; padding:40px; color:#666;">暂无赛事</div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
