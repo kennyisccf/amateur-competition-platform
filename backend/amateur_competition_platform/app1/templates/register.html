@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>用户注册</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .reg-container { width: 300px; margin: 80px auto; padding: 30px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; margin-bottom: 20px; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #007BFF; border: none; border-radius: 4px; color: white; font-size: 16px; cursor: pointer; margin-top:10px; }
+        button:hover { background: #0056b3; }
+        .tip { text-align:center; margin:15px 0; font-size:15px; }
+        .err { color:red; }
+        .suc { color:green; }
+    </style>
+</head>
+<body>
+    <div class="reg-container">
+        <h2>用户注册</h2>
+        {% if msg %}
+        <div class="tip err">{{ msg }}</div>
+        {% endif %}
+
+        {% if success %}
+        <div class="tip suc">注册成功！3秒后自动跳转到登录页</div>
+        <script>
+            setTimeout(function(){
+                window.location.href = "/login/";
+            },3000)
+        </script>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="text" name="username" placeholder="用户名" required>
+            <input type="password" name="password" placeholder="密码" required>
+
+            <select name="role" required>
+                <option value="">请选择角色</option>
+                <option value="PLAYER">个人</option>
+                <option value="ORGANIZER">团体</option>
+            </select>
+
+            <input type="text" name="nickname" placeholder="昵称" required>
+            <input type="email" name="email" placeholder="邮箱" required>
+            <button type="submit">立即注册</button> {{ error_msg }}
+        </form>
+        <div style="text-align:center;margin-top:15px;font-size:14px;">
+            已有账号？<a href="/login/" style="color:#007BFF;text-decoration:none;">去登录</a>
+        </div>
+    </div>
+</body>
+</html>
