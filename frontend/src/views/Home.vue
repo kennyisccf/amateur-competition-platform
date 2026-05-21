@@ -24,7 +24,7 @@
 
     <!-- 赛事列表区 -->
     <div class="event-section">
-      <div class="section-title">🔥 正在火热报名中</div>
+      <div class="section-title">?? 正在火热报名中</div>
       <div class="event-grid">
         <!-- 赛事卡片1 -->
         <div class="event-card">

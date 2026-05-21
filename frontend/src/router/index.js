@@ -3,7 +3,6 @@ import Layout from '../layout/Layout.vue'
 import Register from '../views/Register.vue'
 import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
-import EventDetail from '../views/EventDetail.vue'   
 import Profile from '../views/Profile.vue'          
 
 const routes = [
@@ -21,7 +20,6 @@ const routes = [
     redirect: '/home',
     children: [
       { path: 'home', component: Home },
-      { path: 'event/:id', name: 'EventDetail', component: EventDetail },  // 赛事详情
       { path: 'profile', name: 'Profile', component: Profile }            // 个人档案
     ]
   }
