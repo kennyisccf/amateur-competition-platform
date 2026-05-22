@@ -17,7 +17,7 @@
       <p class="card-sub">请填写信息完成注册</p>
 
       <!-- 原生form表单 -->
-      <form method="post" action="/register" class="register-form">
+      <form class="register-form" @submit.prevent="beforeSubmit">
         <el-form-item>
           <el-input
             type="text"
@@ -72,6 +72,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const registerForm = ref({
   username: '',
@@ -93,31 +97,69 @@ const getCaptcha = () => {
   captcha.value = res
 }
 
-// 表单提交前校验
-const beforeSubmit = (e) => {
+// 注册函数
+const register = async () => {
   const { username, password, password2, code } = registerForm.value
+
   if (!username || !password || !password2) {
     ElMessage.warning('请输入完整信息')
-    e.preventDefault()
     return
   }
   if (password !== password2) {
     ElMessage.error('两次密码不一致')
     getCaptcha()
-    e.preventDefault()
     return
   }
   if (code.toUpperCase() !== captcha.value) {
     ElMessage.error('验证码错误')
     getCaptcha()
-    e.preventDefault()
     return
   }
+
+  try {
+    // 调用注册接口
+    const res = await axios.post('/api/register/', {
+      username,
+      password,
+      password2,
+      role: '选手' // 可以根据实际选择
+    })
+    if (res.data.success) {
+      ElMessage.success(res.data.msg)
+
+      // 注册成功后自动登录
+      const loginRes = await axios.post('/api/login/', {
+        username,
+        password,
+        role: '选手'
+      })
+
+      if (loginRes.data.success) {
+        ElMessage.success('注册并登录成功')
+        router.push('/home')
+      } else {
+        ElMessage.error('注册成功，但自动登录失败，请手动登录')
+        router.push('/login')
+      }
+    } else {
+      ElMessage.error(res.data.msg)
+      getCaptcha()
+    }
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('请求失败，请稍后重试')
+    getCaptcha()
+  }
+}
+
+// 表单提交
+const beforeSubmit = (e) => {
+  e.preventDefault()
+  register()
 }
 
 onMounted(() => {
   getCaptcha()
-  document.querySelector('form.register-form').addEventListener('submit', beforeSubmit)
 })
 </script>
 

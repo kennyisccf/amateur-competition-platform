@@ -21,12 +21,15 @@ class User(models.Model):
 
 class Competition(models.Model):
     title = models.CharField(max_length=100)
+    category = models.CharField(max_length=50)
+    location = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     type = models.CharField(max_length=10)  # PUBLIC PRIVATE
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='organizer_id')
     status = models.IntegerField(default=0)  # 0待审核 1报名中 2进行中 3已结束
     max_participants = models.IntegerField(default=100)
     current_participants = models.IntegerField(default=0)
+    reward_points = models.IntegerField(default=100)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -39,9 +42,22 @@ class Registration(models.Model):
     player = models.ForeignKey(User, on_delete=models.CASCADE, db_column='player_id')
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, db_column='competition_id')
     status = models.IntegerField(default=0)  # 0审核中 1报名成功 2已驳回
+    final_score = models.CharField(max_length=50)
+    final_rank = models.IntegerField(default=0)
+    earned_points = models.IntegerField(default=0)
     audit_remark = models.CharField(max_length=255, null=True, blank=True)
     registration_time = models.DateTimeField(auto_now_add=True)
     class Meta:
         db_table = 'registration'
         unique_together = (('player', 'competition'),)
+        managed = False
+
+class Point_history(models.Model):
+    username = models.CharField(max_length=50)
+    change_amount = models.IntegerField(default=0)
+    reason = models.CharField(max_length=100)
+    time = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        db_table = 'point_history'
+        unique_together = (('username', 'time'),)
         managed = False
