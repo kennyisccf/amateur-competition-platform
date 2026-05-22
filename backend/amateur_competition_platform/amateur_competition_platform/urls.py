@@ -18,9 +18,17 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from app1 import views
+from django.http import JsonResponse
+from django.middleware.csrf import get_token
+def get_csrf_token(request):
+    token = get_token(request)
+    return JsonResponse({'csrfToken': token})
 urlpatterns = [
     #path("admin/", admin.site.urls),
-    path('login/', views.login),
-    path('register/', views.register),
-    path('',views.index),
+    path('api/login/', views.login_api),
+    path('api/register/', views.register_api),
+    path('api/',views.index),
+    path('api/competition/<int:competition_id>/', views.competition_detail),
+    path('csrf/', get_csrf_token, name = 'get_csrf_token'),
+
 ]

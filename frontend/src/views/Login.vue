@@ -24,7 +24,7 @@
       </el-radio-group>
 
       <!-- 原生 form，完全匹配后端接口 -->
-      <form method="post" action="/login" class="login-form" @submit="beforeSubmit">
+      <form class="login-form" @submit="beforeSubmit">
         <!-- 手动添加 CSRF token 隐藏字段（从 Cookie 读取） -->
         <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
 
@@ -75,6 +75,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const userRole = ref('选手')
 const loginForm = ref({
@@ -104,33 +108,56 @@ const getCookie = (name) => {
   return ''
 }
 
-// 表单提交前校验
-const beforeSubmit = (e) => {
+// 登录函数
+const login = async () => {
   const uname = loginForm.value.username.trim()
   const pwd = loginForm.value.password.trim()
   const code = loginForm.value.code.trim()
 
   if (!uname || !pwd) {
     ElMessage.warning('请输入账号密码')
-    e.preventDefault()
     return
   }
+
   if (code.toUpperCase() !== captcha.value) {
     ElMessage.error('验证码错误')
     getCaptcha()
-    e.preventDefault()
     return
   }
-  // 校验通过，表单自然提交（POST /login），页面会刷新
+
+  try {
+    const res = await axios.post('/api/login/', {
+      username: uname,
+      password: pwd,
+      role: userRole.value
+    }, {
+      headers: {
+        'X-CSRFToken': csrfToken.value
+      }
+    })
+
+    if (res.data.success) {
+      ElMessage.success(res.data.msg)
+      // 登录成功跳转 home 页面
+      router.push('/home')
+    } else {
+      ElMessage.error(res.data.msg)
+    }
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('登录请求失败，请稍后重试')
+  }
+}
+
+// 替换原来的表单提交事件
+const beforeSubmit = (e) => {
+  e.preventDefault()
+  login()
 }
 
 onMounted(() => {
   getCaptcha()
-  csrfToken.value = getCookie('csrftoken')   // 根据后端实际 Cookie 名称调整
-  // 从后端注入的全局变量中读取错误信息
-  if (window.__ERROR_MSG__) {
-    backendError.value = window.__ERROR_MSG__
-  }
+  csrfToken.value = getCookie('csrftoken')
 })
 </script>
 
