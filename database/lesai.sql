@@ -1,95 +1,113 @@
--- Active: 1779072788328@@127.0.0.1@3306@mysql
-/*
- Navicat MySQL Data Transfer
- Target Server Type    : MySQL
- Target Server Version : 80046
- File Encoding         : 65001
- Project               : 乐赛一站式服务平台 (LeSai Platform)
-*/
+-- ======================================================
+-- 乐赛 (LeSai) 数据库最终整合版 V2.1
+-- 包含：用户、赛事、报名、积分流水、通知、审核记录
+-- ======================================================
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-
--- ----------------------------
--- 1. 创建数据库
--- ----------------------------
-CREATE DATABASE IF NOT EXISTS `lesai_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE DATABASE IF NOT EXISTS `lesai_db` CHARACTER SET utf8mb4;
 USE `lesai_db`;
 
--- ----------------------------
--- 2. 创建用户表 (user)
--- ----------------------------
+-- 1. 用户表
 DROP TABLE IF EXISTS `user`;
 CREATE TABLE `user` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `username` varchar(50) NOT NULL UNIQUE COMMENT '登录账号',
-  `password` varchar(255) NOT NULL COMMENT '密码(明文存储仅限测试，建议后期加密)',
-  `role` enum('ADMIN','ORGANIZER','PLAYER') NOT NULL DEFAULT 'PLAYER' COMMENT '角色: ADMIN-管理员, ORGANIZER-主办方, PLAYER-选手',
-  `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
-  `email` varchar(100) DEFAULT NULL COMMENT '邮箱',
-  `points` int DEFAULT 0 COMMENT '积分',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
-  `is_deleted` tinyint(1) DEFAULT 0 COMMENT '逻辑删除: 0-正常, 1-已删除',
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) NOT NULL UNIQUE,
+  `password` varchar(255) NOT NULL,
+  `role` enum('ADMIN','ORGANIZER','PLAYER') NOT NULL,
+  `nickname` varchar(50) DEFAULT NULL,
+  `points` int DEFAULT 0,
+  `level` varchar(20) DEFAULT '青铜',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='用户基础信息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ----------------------------
--- 3. 创建赛事表 (competition)
--- ----------------------------
+-- 2. 赛事表
 DROP TABLE IF EXISTS `competition`;
 CREATE TABLE `competition` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '赛事ID',
-  `title` varchar(100) NOT NULL COMMENT '赛事名称',
-  `description` text COMMENT '赛事介绍',
-  `type` enum('PUBLIC','PRIVATE') DEFAULT 'PUBLIC' COMMENT '赛事类型: PUBLIC-公开积分赛, PRIVATE-私人赛',
-  `organizer_id` bigint NOT NULL COMMENT '主办方ID(关联user表)',
-  `status` tinyint DEFAULT 0 COMMENT '状态: 0-待审核, 1-报名中, 2-进行中, 3-已结束',
-  `max_participants` int DEFAULT 100 COMMENT '人数上限',
-  `current_participants` int DEFAULT 0 COMMENT '已报名人数',
-  `start_time` datetime NOT NULL COMMENT '开始时间',
-  `end_time` datetime NOT NULL COMMENT '结束时间',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `title` varchar(100) NOT NULL,
+  `category` enum('篮球','羽毛球','电竞','棋牌','其他') NOT NULL,
+  `location` varchar(255) DEFAULT '线上',
+  `organizer_id` bigint NOT NULL,
+  `status` tinyint DEFAULT 0 COMMENT '0待审,1报名中,2进行中,3已结束,4已驳回',
+  `reward_points` int DEFAULT 100,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_organizer` (`organizer_id`),
   CONSTRAINT `fk_comp_user` FOREIGN KEY (`organizer_id`) REFERENCES `user` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='赛事信息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ----------------------------
--- 4. 创建报名记录表 (registration)
--- ----------------------------
+-- 3. 报名表
 DROP TABLE IF EXISTS `registration`;
 CREATE TABLE `registration` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '报名ID',
-  `player_id` bigint NOT NULL COMMENT '选手ID(关联user表)',
-  `competition_id` bigint NOT NULL COMMENT '赛事ID(关联competition表)',
-  `status` tinyint DEFAULT 0 COMMENT '报名状态: 0-审核中, 1-报名成功, 2-已驳回',
-  `audit_remark` varchar(255) DEFAULT NULL COMMENT '审核意见',
-  `registration_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '报名提交时间',
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `player_id` bigint NOT NULL,
+  `competition_id` bigint NOT NULL,
+  `status` tinyint DEFAULT 0 COMMENT '0待审,1成功,2拒绝',
+  `final_score` varchar(50) DEFAULT NULL,
+  `earned_points` int DEFAULT 0,
+  `registration_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_player_comp` (`player_id`,`competition_id`) COMMENT '防止重复报名',
-  KEY `idx_comp` (`competition_id`),
   CONSTRAINT `fk_reg_comp` FOREIGN KEY (`competition_id`) REFERENCES `competition` (`id`),
   CONSTRAINT `fk_reg_user` FOREIGN KEY (`player_id`) REFERENCES `user` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='赛事报名表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. 赛事通知表 (新增)
+DROP TABLE IF EXISTS `notice`;
+CREATE TABLE `notice` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `title` varchar(100) NOT NULL,
+  `content` text NOT NULL,
+  `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_notice_comp` FOREIGN KEY (`competition_id`) REFERENCES `competition` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. 审核记录表 (新增)
+DROP TABLE IF EXISTS `audit_record`;
+CREATE TABLE `audit_record` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_id` bigint NOT NULL,
+  `auditor_id` bigint NOT NULL COMMENT '管理员ID',
+  `result` tinyint NOT NULL COMMENT '1:通过, 2:驳回',
+  `remark` varchar(255) DEFAULT NULL,
+  `audit_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_audit_comp` FOREIGN KEY (`competition_id`) REFERENCES `competition` (`id`),
+  CONSTRAINT `fk_audit_user` FOREIGN KEY (`auditor_id`) REFERENCES `user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6. 积分流水表
+DROP TABLE IF EXISTS `point_history`;
+CREATE TABLE `point_history` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `change_amount` int NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_point_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
--- 5. 准备测试数据
+-- 丰富测试数据 (覆盖各种业务场景)
 -- ----------------------------
+INSERT INTO `user` VALUES 
+(1, 'admin_root', '123456', 'ADMIN', '系统总管', 0, '无', NOW()),
+(2, 'lesai_club', '123456', 'ORGANIZER', '乐赛官方俱乐部', 0, '无', NOW()),
+(3, 'player_mike', '123456', 'PLAYER', '迈克', 1500, '白银', NOW()),
+(4, 'player_jane', '123456', 'PLAYER', '简', 500, '青铜', NOW());
 
--- 测试账号 (密码统一为 123456)
-INSERT INTO `user` (`username`, `password`, `role`, `nickname`, `email`, `points`) VALUES 
-('admin01', '123456', 'ADMIN', '平台总管', 'admin@lesai.com', 0),
-('org_ali', '123456', 'ORGANIZER', '阿里体育', 'contact@ali.com', 0),
-('player_zs', '123456', 'PLAYER', '张三', 'zs@example.com', 500),
-('player_ls', '123456', 'PLAYER', '李四', 'ls@example.com', 1200);
+INSERT INTO `competition` VALUES 
+(1, '第一届乐赛羽毛球公开赛', '羽毛球', '市体育馆', 2, 1, 150, '2026-06-10', '2026-06-12'),
+(2, '社区电竞大赛-王者荣耀', '电竞', '线上', 2, 0, 200, '2026-07-01', '2026-07-05');
 
--- 测试赛事 (主办方ID=2，即 org_ali)
-INSERT INTO `competition` (`title`, `description`, `type`, `organizer_id`, `status`, `max_participants`, `start_time`, `end_time`) VALUES 
-('2026春季篮球联赛', '业余组巅峰对决', 'PUBLIC', 2, 1, 50, '2026-06-01 09:00:00', '2026-06-15 18:00:00'),
-('内部羽毛球友谊赛', '仅限受邀成员', 'PRIVATE', 2, 1, 20, '2026-07-10 14:00:00', '2026-07-10 18:00:00');
+-- 模拟一条审核记录 (管理员审核了电竞大赛)
+INSERT INTO `audit_record` (`competition_id`, `auditor_id`, `result`, `remark`) VALUES (2, 1, 1, '资料齐全，准予办赛');
 
--- 测试报名记录 (选手3报名赛事1)
-INSERT INTO `registration` (`player_id`, `competition_id`, `status`, `audit_remark`) VALUES 
-(3, 1, 1, '系统自动通过');
+-- 模拟一条通知
+INSERT INTO `notice` (`competition_id`, `title`, `content`) VALUES (1, '场地变更通知', '原定于1号场地的比赛改为3号场地');
 
 SET FOREIGN_KEY_CHECKS = 1;
