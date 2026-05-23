@@ -1,9 +1,14 @@
 # 乐赛平台接口说明文档 (API)
 
 ## 全局规范
+* **前端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
+
 * **基础路径:** `http://localhost:8000/api`
+
 * **请求头:** 所有需要鉴权的接口，均需要在 Header 中携带 `Authorization: Bearer <your_jwt_token>`
+
 * **全局返回格式:**
+
     ```json
     {
       "code": 200,
@@ -12,7 +17,6 @@
     }
     ```
 
----
 
 ## 1. 用户模块 (User)
 
@@ -139,3 +143,74 @@
 3. 前端收到返回 JSON 后，根据 `success` 判断是否报名成功，并展示 `msg` 提示用户。
 4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
 5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
+
+## 4.管理员获取待审核赛事
+
+#### GET
+
+```
+axios.get('/api/admin/pending_competitions/')
+```
+
+返回：
+
+```
+{
+  "success": true,
+  "data": [...]
+}
+```
+
+## 5.管理员审核赛事
+
+### POST
+
+```
+axios.post('/api/admin/review_competition/', {
+    competition_id: 1,
+    status: 1
+})
+```
+
+### 审核状态
+
+| status | 含义 |
+| ------ | ---- |
+| 1      | 通过 |
+| 4      | 驳回 |
+
+## 6.获取赛事详细信息
+
+#### GET
+
+```
+axios.get('api/competition/<int:competition_id>/')
+```
+
+返回：
+
+```
+{
+  "success": true,
+  "data": [...]
+}
+```
+
+## 7.获取用户详细信息
+
+#### GET
+
+```
+axios.get('api/user/<int:user_id>/')
+```
+
+返回：
+
+```
+{
+  "success": true,
+  "data": [...]
+}
+```
+
+## 

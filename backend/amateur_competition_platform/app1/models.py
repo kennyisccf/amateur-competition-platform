@@ -26,13 +26,15 @@ class Competition(models.Model):
     description = models.TextField(null=True, blank=True)
     type = models.CharField(max_length=10)  # PUBLIC PRIVATE
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='organizer_id')
-    status = models.IntegerField(default=0)  # 0待审核 1报名中 2进行中 3已结束
+    status = models.IntegerField(default=0)  # 0待审核 1报名中 2进行中 3已结束 4驳回
     max_participants = models.IntegerField(default=100)
     current_participants = models.IntegerField(default=0)
     reward_points = models.IntegerField(default=100)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    invite_code = models.CharField(max_length=50, null=True, blank=True)
+    reject_reason = models.CharField( max_length=255,null=True,blank=True)
     class Meta:
         db_table = 'competition'
         managed = False
@@ -47,6 +49,7 @@ class Registration(models.Model):
     earned_points = models.IntegerField(default=0)
     audit_remark = models.CharField(max_length=255, null=True, blank=True)
     registration_time = models.DateTimeField(auto_now_add=True)
+    invite_code = models.CharField(max_length=50, null=True, blank=True)
     class Meta:
         db_table = 'registration'
         unique_together = (('player', 'competition'),)

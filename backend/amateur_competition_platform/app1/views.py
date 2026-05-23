@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
 @csrf_exempt
-def login_api(request):
+def login(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
     try:
@@ -44,7 +44,7 @@ def login_api(request):
 #
 #     return render(request, "login.html")
 @csrf_exempt
-def register_api(request):
+def register(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
     username = request.POST.get('username', '').strip()
@@ -76,7 +76,7 @@ def register_api(request):
     return JsonResponse({"success": True, "msg": "注册成功"})
 
 
-def index(request):
+def competition_list(request):
     c_type = request.GET.get('type', '')
     c_status = request.GET.get('status', '')
     competitions = models.Competition.objects.all()
@@ -85,9 +85,29 @@ def index(request):
     if c_status:
         competitions = competitions.filter(status=c_status)
     competitions = competitions.order_by('-created_at')
-    return render(request, 'index.html', {
-        'competitions': competitions
-    })
+    data = []
+    for c in competitions:
+        data.append({
+            "id": c.id,
+            "title": c.title,
+            "category": c.category,
+            "location": c.location,
+            "description": c.description,
+            "type": c.type,
+            "status": c.status,
+            "max_participants": c.max_participants,
+            "current_participants": c.current_participants,
+            "reward_points": c.reward_points,
+            "start_time": c.start_time,
+            "end_time": c.end_time,
+            "created_at": c.created_at,
+            "organizer": {
+                "id": c.organizer.id,
+                "username": c.organizer.username,
+                "nickname": c.organizer.nickname
+            }
+        })
+    return JsonResponse({"success": True, "competitions": data})
 
 
 def competition_detail(request, competition_id):
@@ -115,6 +135,21 @@ def competition_detail(request, competition_id):
     return JsonResponse({"success": True, "data": data})
 
 @csrf_exempt
+def user_detail(request, user_id):
+    user = models.User.objects.filter(id=user_id).first()
+    data = {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "email": user.email,
+        "role": user.role,
+        "points": user.points,
+        "created_at": user.created_at,
+        "is_deleted": user.is_deleted,
+    }
+    return JsonResponse({"success": True, "data": data})
+
+@csrf_exempt
 def submit_registration(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
@@ -122,6 +157,7 @@ def submit_registration(request):
         data = json.loads(request.body)
         player_id = data.get("player_id")
         competition_id = data.get("competition_id")
+        invite_code = data.get("invite_code", '').strip()
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
     player = models.User.objects.filter(id=player_id, role='PLAYER').first()
@@ -130,19 +166,104 @@ def submit_registration(request):
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False, "msg": "赛事不存在"})
-    current_count = models.Registration.objects.filter(competition=competition, status__in=[0,1]).count()
-    if current_count >= competition.max_participants:
-        return JsonResponse({"success": False, "msg": "报名人数已满"})
-    existing = models.Registration.objects.filter(player=player, competition=competition).first()
-    if existing:
+    if models.Registration.objects.filter(player=player, competition=competition).exists():
         return JsonResponse({"success": False, "msg": "你已报名该赛事"})
+
+    if competition.type == 'PUBLIC':
+        status = 0
+        invite_code = ''
+    elif competition.type == 'PRIVATE':
+        if not invite_code:
+            return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
+        status = 1
     models.Registration.objects.create(
         player=player,
         competition=competition,
-        status=0,
-        final_score='',
-        final_rank=0,
-        earned_points=0,
-        audit_remark=''
+        status=status,
+        invite_code=invite_code
     )
     return JsonResponse({"success": True, "msg": "报名成功"})
+
+@csrf_exempt
+def create_competition(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        player_id = data.get("player_id")
+        competition_id = data.get("competition_id")
+        invite_code = data.get("invite_code",'').strip()
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    player = models.User.objects.filter(id=player_id, role='PLAYER').first()
+    if not player:
+        return JsonResponse({"success": False, "msg": "用户不存在"})
+
+
+    competition = models.Competition.objects.filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"})
+    if models.Registration.objects.filter(player=player, competition=competition).exists():
+        return JsonResponse({"success": False, "msg": "你已报名该赛事"})
+    if competition.type == 'PUBLIC':
+        status = 0
+        invite_code = ''
+    elif competition.type == 'PRIVATE':
+        if not invite_code:
+            return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
+        status = 1
+    models.Registration.objects.create(
+        player=player,
+        competition=competition,
+        status=status,
+        invite_code=invite_code
+    )
+    return JsonResponse({"success": True, "msg": "报名成功"})
+
+def pending_competitions(request): #管理员查看待审核的赛事
+    competitions = models.Competition.objects.filter(type='PUBLIC',status=0).order_by('-created_at')
+    data = []
+    for c in competitions:
+        data.append({
+            "id": c.id,
+            "title": c.title,
+            "category": c.category,
+            "location": c.location,
+            "description": c.description,
+            "max_participants": c.max_participants,
+            "current_participants": c.current_participants,
+            "reward_points": c.reward_points,
+            "start_time": c.start_time,
+            "end_time": c.end_time,
+            "organizer": {
+                "id": c.organizer.id,
+                "username": c.organizer.username,
+                "nickname": c.organizer.nickname
+            }
+        })
+    return JsonResponse({"success": True,"data": data})
+
+@csrf_exempt
+def review_competition(request): #管理员审核赛事 1:通过 4:驳回
+    if request.method != "POST":
+        return JsonResponse({"success": False,"msg": "仅支持 POST"})
+    try:
+        data = json.loads(request.body)
+        competition_id = data.get("competition_id")
+        status = data.get("status")
+    except Exception:
+        return JsonResponse({"success": False,"msg": "请求格式错误"})
+    competition = models.Competition.objects.filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False,"msg": "赛事不存在"})
+    if competition.status != 0:
+        return JsonResponse({"success": False,"msg": "该赛事已审核"})
+    if status == 1:
+        competition.status = 1
+    elif status == 4:
+        competition.status = 4
+    else:
+        return JsonResponse({"success": False,"msg": "非法审核状态"})
+    competition.save()
+    return JsonResponse({"success": True,"msg": "审核完成"})
+
