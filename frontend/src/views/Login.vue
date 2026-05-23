@@ -1,267 +1,216 @@
 <template>
   <div class="login-container">
-    <!-- 左侧品牌区域 -->
     <div class="login-left">
-      <h1 class="login-title">乐赛</h1>
-      <p class="login-desc">一站式赛事服务平台 · 精彩有你</p>
-      <div class="tag-group">
-        <el-tag>多元赛事</el-tag>
-        <el-tag>全民参与</el-tag>
-        <el-tag>智能成长</el-tag>
+      <h1>乐赛</h1>
+      <p>一站式服务平台 · 精彩有你</p>
+      <div class="tags">
+        <span>多元赛事</span>
+        <span>全民参与</span>
+        <span>智能成长</span>
       </div>
     </div>
+    <div class="login-form-card">
+      <h2>欢迎登录</h2>
+      <p>请选择您的系统角色并输入凭证</p>
+      
+      <!-- 角色选择 -->
+      <div class="role-tabs">
+        <button 
+          v-for="role in roleList" 
+          :key="role.value"
+          :class="{ active: selectedRole === role.value }"
+          @click="selectedRole = role.value"
+        >
+          {{ role.label }}
+        </button>
+      </div>
 
-    <!-- 右侧登录卡片 -->
-    <div class="login-card">
-      <h2 class="card-title">欢迎登录</h2>
-      <p class="card-sub">请选择您的系统角色并输入凭证</p>
-
-      <!-- 角色切换标签 -->
-      <el-radio-group v-model="userRole" class="role-tabs">
-        <el-radio-button label="选手" />
-        <el-radio-button label="主办方" />
-        <el-radio-button label="管理员" />
-      </el-radio-group>
-
-      <!-- 原生 form，完全匹配后端接口 -->
-      <form class="login-form" @submit="beforeSubmit">
-        <!-- 手动添加 CSRF token 隐藏字段（从 Cookie 读取） -->
-        <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
-
-        <el-form-item>
+      <form @submit.prevent="handleLogin">
+        <el-input
+          v-model="form.username"
+          placeholder="请输入用户名"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <el-input
+          v-model="form.password"
+          type="password"
+          placeholder="请输入密码"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <div class="captcha-row">
           <el-input
-            type="text"
-            name="username"
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            required
+            v-model="form.captcha"
+            placeholder="图形验证码"
+            style="flex: 1; margin-right: 12px"
           />
-        </el-form-item>
-
-        <el-form-item>
-          <el-input
-            type="password"
-            name="password"
-            v-model="loginForm.password"
-            placeholder="请输入密码"
-            required
-          />
-        </el-form-item>
-
-        <!-- 验证码行（前端模拟） -->
-        <div class="code-row">
-          <el-input v-model="loginForm.code" placeholder="图形验证码" />
-          <div class="code-box" @click="getCaptcha">{{ captcha }}</div>
+          <div class="captcha-code">8A3F</div>
         </div>
 
-        <el-form-item>
-          <el-button type="primary" class="login-btn" native-type="submit">登录</el-button>
-        </el-form-item>
+        <el-button type="primary" style="width: 100%; margin-top: 24px" native-type="submit">
+          立即登录
+        </el-button>
+
+        <div class="form-footer">
+          <a href="#">忘记密码?</a>
+          <span>还没有账户? <router-link to="/register">立即注册</router-link></span>
+        </div>
       </form>
-
-      <!-- 后端错误信息：从 window.__ERROR_MSG__ 读取 -->
-      <div class="error-tip" v-if="backendError">{{ backendError }}</div>
-
-      <!-- 底部链接 -->
-      <div class="login-footer">
-        <a href="#">忘记密码？</a>
-        <span>还没有账户？</span>
-        <router-link to="/register">立即注册</router-link>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
-const userRole = ref('选手')
-const loginForm = ref({
+// 角色列表，对应接口要求的中文role
+const roleList = [
+  { label: '参赛选手', value: '选手' },
+  { label: '赛事主办方', value: '主办方' },
+  { label: '平台管理员', value: '管理员' }
+]
+const selectedRole = ref('选手')
+
+const form = ref({
   username: '',
   password: '',
-  code: ''
+  captcha: ''
 })
-const captcha = ref('')
-const backendError = ref('')
-const csrfToken = ref('')
 
-// 生成验证码
-const getCaptcha = () => {
-  const str = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  let res = ''
-  for (let i = 0; i < 4; i++) {
-    res += str[Math.floor(Math.random() * 36)]
-  }
-  captcha.value = res
-}
-
-// 获取 CSRF Token（从 Cookie 中读取）
-const getCookie = (name) => {
-  const value = `; ${document.cookie}`
-  const parts = value.split(`; ${name}=`)
-  if (parts.length === 2) return parts.pop().split(';').shift()
-  return ''
-}
-
-// 登录函数
-const login = async () => {
-  const uname = loginForm.value.username.trim()
-  const pwd = loginForm.value.password.trim()
-  const code = loginForm.value.code.trim()
-
-  if (!uname || !pwd) {
-    ElMessage.warning('请输入账号密码')
-    return
-  }
-
-  if (code.toUpperCase() !== captcha.value) {
-    ElMessage.error('验证码错误')
-    getCaptcha()
+// 登录处理
+const handleLogin = async () => {
+  if (!form.value.username || !form.value.password) {
+    ElMessage.warning('请输入用户名和密码')
     return
   }
 
   try {
-    const res = await axios.post('/api/login/', {
-      username: uname,
-      password: pwd,
-      role: userRole.value
-    }, {
-      headers: {
-        'X-CSRFToken': csrfToken.value
+    // 1. 获取CSRF Token
+    const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    const csrfToken = csrfRes.data.csrfToken
+
+    // 2. 调用登录接口
+    const res = await axios.post(
+      'http://localhost:8000/api/login/',
+      {
+        username: form.value.username,
+        password: form.value.password,
+        role: selectedRole.value
+      },
+      {
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'application/json'
+        }
       }
-    })
+    )
 
     if (res.data.success) {
-      ElMessage.success(res.data.msg)
-      // 登录成功跳转 home 页面
+      ElMessage.success('登录成功')
+      // 保存用户ID，后续报名接口需要
+      localStorage.setItem('user_id', res.data.user_id)
       router.push('/home')
     } else {
-      ElMessage.error(res.data.msg)
+      ElMessage.error(res.data.msg || '登录失败')
     }
   } catch (err) {
+    ElMessage.error('请求失败，请检查后端服务是否启动')
     console.error(err)
-    ElMessage.error('登录请求失败，请稍后重试')
   }
 }
-
-// 替换原来的表单提交事件
-const beforeSubmit = (e) => {
-  e.preventDefault()
-  login()
-}
-
-onMounted(() => {
-  getCaptcha()
-  csrfToken.value = getCookie('csrftoken')
-})
 </script>
 
 <style scoped>
-/* 你的原有样式，完全不变 */
 .login-container {
-  width: 100vw;
+  display: flex;
   height: 100vh;
-  background: linear-gradient(135deg, #1a3a4a, #244757);
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 10%;
+}
+.login-left {
+  color: white;
+}
+.login-left h1 {
+  font-size: 48px;
+  margin: 0 0 12px;
+}
+.login-left p {
+  font-size: 20px;
+  opacity: 0.9;
+  margin: 0 0 24px;
+}
+.tags {
+  display: flex;
+  gap: 12px;
+}
+.tags span {
+  padding: 6px 16px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  font-size: 14px;
+}
+.login-form-card {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+.login-form-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+.login-form-card p {
+  color: #666;
+  margin: 0 0 24px;
+  font-size: 14px;
+}
+.role-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.role-tabs button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #f0f2f5;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.role-tabs button.active {
+  background: #1677ff;
+  color: white;
+}
+.captcha-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 120px;
-}
-
-.login-left {
-  color: #fff;
-}
-.login-title {
-  font-size: 46px;
-  font-weight: 600;
   margin-bottom: 16px;
 }
-.login-desc {
-  font-size: 18px;
-  opacity: 0.8;
-  margin-bottom: 30px;
+.captcha-code {
+  padding: 10px 16px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  font-weight: bold;
+  letter-spacing: 2px;
 }
-.tag-group {
+.form-footer {
   display: flex;
-  gap: 12px;
-}
-
-.login-card {
-  width: 420px;
-  padding: 40px 30px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  margin-right: 300px;
-}
-.card-title {
-  font-size: 24px;
-  margin: 0 0 8px;
-}
-.card-sub {
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 24px;
-}
-
-.role-tabs {
-  margin-bottom: 20px;
-  width: 100%;
-}
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.code-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.code-row .el-input {
-  flex: 1;
-}
-.code-box {
-  width: 120px;
-  height: 40px;
-  background: #f0f2f5;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 4px;
-  user-select: none;
-  cursor: pointer;
-}
-
-.login-btn {
-  width: 100%;
-  height: 44px;
-  font-size: 16px;
-}
-
-.error-tip {
-  color: #ff4d4f;
-  text-align: center;
-  margin-top: 8px;
-}
-
-.login-footer {
-  text-align: center;
-  font-size: 13px;
-  color: #666;
+  justify-content: space-between;
   margin-top: 16px;
+  font-size: 13px;
 }
-.login-footer a {
-  color: #4080ff;
+.form-footer a, .form-footer span a {
+  color: #1677ff;
   text-decoration: none;
 }
 </style>

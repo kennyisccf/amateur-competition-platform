@@ -1,270 +1,223 @@
 <template>
   <div class="register-container">
-    <!-- 左侧品牌区域 -->
     <div class="register-left">
-      <h1 class="register-title">乐赛</h1>
-      <p class="register-desc">一站式赛事服务平台 · 精彩有你</p>
-      <div class="tag-group">
-        <el-tag>多元赛事</el-tag>
-        <el-tag>全民参与</el-tag>
-        <el-tag>智能成长</el-tag>
+      <h1>乐赛</h1>
+      <p>一站式服务平台 · 精彩有你</p>
+      <div class="tags">
+        <span>多元赛事</span>
+        <span>全民参与</span>
+        <span>智能成长</span>
       </div>
     </div>
-
-    <!-- 右侧注册卡片 -->
-    <div class="register-card">
-      <h2 class="card-title">欢迎注册</h2>
-      <p class="card-sub">请填写信息完成注册</p>
-
-      <!-- 原生form表单 -->
-      <form class="register-form" @submit.prevent="beforeSubmit">
-        <el-form-item>
-          <el-input
-            type="text"
-            name="username"
-            v-model="registerForm.username"
-            placeholder="请输入用户名"
-            required
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-input
-            type="password"
-            name="password"
-            v-model="registerForm.password"
-            placeholder="请输入密码"
-            required
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-input
-            type="password"
-            name="password2"
-            v-model="registerForm.password2"
-            placeholder="请再次输入密码"
-            required
-          />
-        </el-form-item>
-
-        <!-- 验证码行 -->
-        <div class="code-row">
-          <el-input v-model="registerForm.code" placeholder="图形验证码" />
-          <div class="code-box" @click="getCaptcha">{{ captcha }}</div>
-        </div>
-
-        <el-form-item>
-          <el-button type="primary" class="register-btn" native-type="submit">注册</el-button>
-        </el-form-item>
-      </form>
-
-      <!-- 后端错误/成功信息 -->
-      <div class="tip" :class="tipClass" v-if="tipMsg">{{ tipMsg }}</div>
-
-      <!-- 底部链接 -->
-      <div class="register-footer">
-        <span>已有账户？</span>
-        <router-link to="/login">立即登录</router-link>
+    <div class="register-form-card">
+      <h2>欢迎注册</h2>
+      <p>创建您的账户，开启赛事之旅</p>
+      
+      <!-- 角色选择 -->
+      <div class="role-tabs">
+        <button 
+          v-for="role in roleList" 
+          :key="role.value"
+          :class="{ active: selectedRole === role.value }"
+          @click="selectedRole = role.value"
+        >
+          {{ role.label }}
+        </button>
       </div>
+
+      <form @submit.prevent="handleRegister">
+        <el-input
+          v-model="form.username"
+          placeholder="请输入用户名"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <el-input
+          v-model="form.nickname"
+          placeholder="请输入昵称（选填，默认同用户名）"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <el-input
+          v-model="form.email"
+          placeholder="请输入邮箱（选填）"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <el-input
+          v-model="form.password"
+          type="password"
+          placeholder="请输入密码"
+          clearable
+          style="margin-bottom: 16px"
+        />
+        <el-input
+          v-model="form.password2"
+          type="password"
+          placeholder="请确认密码"
+          clearable
+          style="margin-bottom: 16px"
+        />
+
+        <el-button type="primary" style="width: 100%; margin-top: 24px" native-type="submit">
+          立即注册
+        </el-button>
+
+        <div class="form-footer">
+          <span>已有账户? <router-link to="/login">立即登录</router-link></span>
+        </div>
+      </form>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
-const registerForm = ref({
+// 角色列表，对应接口要求的英文role
+const roleList = [
+  { label: '参赛选手', value: 'PLAYER' },
+  { label: '赛事主办方', value: 'ORGANIZER' },
+  { label: '平台管理员', value: 'ADMIN' }
+]
+const selectedRole = ref('PLAYER')
+
+const form = ref({
   username: '',
+  nickname: '',
+  email: '',
   password: '',
-  password2: '',
-  code: ''
+  password2: ''
 })
-const captcha = ref('')
-const tipMsg = ref('')
-const tipClass = ref('')
 
-// 生成验证码
-const getCaptcha = () => {
-  const str = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  let res = ''
-  for (let i = 0; i < 4; i++) {
-    res += str[Math.floor(Math.random() * 36)]
-  }
-  captcha.value = res
-}
-
-// 注册函数
-const register = async () => {
-  const { username, password, password2, code } = registerForm.value
-
-  if (!username || !password || !password2) {
-    ElMessage.warning('请输入完整信息')
+// 注册处理
+const handleRegister = async () => {
+  if (!form.value.username || !form.value.password || !form.value.password2) {
+    ElMessage.warning('请填写必填项')
     return
   }
-  if (password !== password2) {
-    ElMessage.error('两次密码不一致')
-    getCaptcha()
-    return
-  }
-  if (code.toUpperCase() !== captcha.value) {
-    ElMessage.error('验证码错误')
-    getCaptcha()
+  if (form.value.password !== form.value.password2) {
+    ElMessage.warning('两次密码输入不一致')
     return
   }
 
   try {
-    // 调用注册接口
-    const res = await axios.post('/api/register/', {
-      username,
-      password,
-      password2,
-      role: '选手' // 可以根据实际选择
-    })
-    if (res.data.success) {
-      ElMessage.success(res.data.msg)
+    // 1. 获取CSRF Token
+    const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    const csrfToken = csrfRes.data.csrfToken
 
-      // 注册成功后自动登录
-      const loginRes = await axios.post('/api/login/', {
-        username,
-        password,
-        role: '选手'
-      })
+    // 2. 构造FormData（接口要求form-data格式，不支持JSON）
+    const formData = new FormData()
+    formData.append('username', form.value.username)
+    formData.append('password', form.value.password)
+    formData.append('password2', form.value.password2)
+    formData.append('role', selectedRole.value)
+    if (form.value.nickname) formData.append('nickname', form.value.nickname)
+    if (form.value.email) formData.append('email', form.value.email)
 
-      if (loginRes.data.success) {
-        ElMessage.success('注册并登录成功')
-        router.push('/home')
-      } else {
-        ElMessage.error('注册成功，但自动登录失败，请手动登录')
-        router.push('/login')
+    // 3. 调用注册接口
+    const res = await axios.post(
+      'http://localhost:8000/api/register/',
+      formData,
+      {
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'multipart/form-data'
+        }
       }
+    )
+
+    if (res.data.success) {
+      ElMessage.success('注册成功，即将跳转到登录页')
+      router.push('/login')
     } else {
-      ElMessage.error(res.data.msg)
-      getCaptcha()
+      ElMessage.error(res.data.msg || '注册失败')
     }
   } catch (err) {
+    ElMessage.error('请求失败，请检查后端服务是否启动')
     console.error(err)
-    ElMessage.error('请求失败，请稍后重试')
-    getCaptcha()
   }
 }
-
-// 表单提交
-const beforeSubmit = (e) => {
-  e.preventDefault()
-  register()
-}
-
-onMounted(() => {
-  getCaptcha()
-})
 </script>
 
 <style scoped>
 .register-container {
-  width: 100vw;
+  display: flex;
   height: 100vh;
-  background: linear-gradient(135deg, #1a3a4a, #244757);
-  display: flex;
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
   align-items: center;
-  justify-content: space-between;
-  padding: 0 120px;
+  justify-content: space-around;
+  padding: 0 10%;
 }
-
-/* 左侧品牌 */
 .register-left {
-  color: #fff;
+  color: white;
 }
-.register-title {
-  font-size: 46px;
-  font-weight: 600;
-  margin-bottom: 16px;
+.register-left h1 {
+  font-size: 48px;
+  margin: 0 0 12px;
 }
-.register-desc {
-  font-size: 18px;
-  opacity: 0.8;
-  margin-bottom: 30px;
+.register-left p {
+  font-size: 20px;
+  opacity: 0.9;
+  margin: 0 0 24px;
 }
-.tag-group {
+.tags {
   display: flex;
   gap: 12px;
 }
-
-/* 右侧注册卡片 */
-.register-card {
-  width: 420px;
-  padding: 40px 30px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  margin-right:300px;
-}
-.card-title {
-  font-size: 24px;
-  margin: 0 0 8px;
-}
-.card-sub {
-  color: #666;
+.tags span {
+  padding: 6px 16px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
   font-size: 14px;
-  margin-bottom: 24px;
 }
-
-.register-form {
-  gap: 12px;
+.register-form-card {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
 }
-
-/* 验证码行 */
-.code-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
+.register-form-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
 }
-.code-row .el-input {
-  flex: 1;
-}
-.code-box {
-  width: 120px;
-  height: 40px;
-  background: #f0f2f5;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 4px;
-  user-select: none;
-  cursor: pointer;
-}
-
-.register-btn {
-  width: 100%;
-  height: 44px;
-  font-size: 16px;
-}
-
-.tip {
-  text-align: center;
-  margin-top: 8px;
-}
-.tip.error {
-  color: #ff4d4f;
-}
-.tip.success {
-  color: #52c41a;
-}
-
-.register-footer {
-  text-align: center;
-  font-size: 13px;
+.register-form-card p {
   color: #666;
-  margin-top: 16px;
+  margin: 0 0 24px;
+  font-size: 14px;
 }
-.register-footer a {
-  color: #4080ff;
+.role-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.role-tabs button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #f0f2f5;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.role-tabs button.active {
+  background: #1677ff;
+  color: white;
+}
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.form-footer span a {
+  color: #1677ff;
   text-decoration: none;
 }
 </style>

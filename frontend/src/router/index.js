@@ -4,7 +4,9 @@ import Register from '../views/Register.vue'
 import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
 import Profile from '../views/Profile.vue'          
-import component from 'element-plus/es/components/tree-select/src/tree-select-option.mjs'
+// 新增导入赛事页面
+import EventDetail from '../views/EventDetail.vue'
+import EventRegister from '../views/EventRegister.vue'
 
 const routes = [
   {
@@ -21,7 +23,10 @@ const routes = [
     redirect: '/home',
     children: [
       { path: 'home', component: Home },
-      { path: 'profile', name: 'Profile', component: Profile }            // 个人档案
+      { path: 'profile', name: 'Profile', component: Profile },
+      // 新增赛事相关路由
+      { path: 'event-detail/:id', name: 'EventDetail', component: EventDetail },
+      { path: 'event-register/:id', name: 'EventRegister', component: EventRegister }
     ]
   }
 ]
