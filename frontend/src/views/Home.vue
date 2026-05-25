@@ -24,12 +24,11 @@
 
     <!-- 赛事列表区 -->
     <div class="event-section">
-      <div class="section-title">?? 正在火热报名中</div>
+      <div class="section-title">🔥 正在火热报名中</div>
       <div class="event-grid">
-        <!-- 赛事卡片1 -->
-        <div class="event-card">
+        <!-- 赛事卡片1：加了点击跳转，跳转到id=1的赛事 -->
+        <div class="event-card" @click="goToDetail(1)">
           <div class="card-image">
-           
             <span class="tag blue">传统体育</span>
             <div class="card-overlay">
               <h3>街球狂飙</h3>
@@ -41,10 +40,9 @@
           </div>
         </div>
 
-        <!-- 赛事卡片2 -->
-        <div class="event-card">
+        <!-- 赛事卡片2：跳转到id=2的赛事 -->
+        <div class="event-card" @click="goToDetail(2)">
           <div class="card-image">
-            
             <span class="tag purple">电子竞技</span>
             <div class="card-overlay">
               <h3>暗黑突围</h3>
@@ -56,10 +54,9 @@
           </div>
         </div>
 
-        <!-- 赛事卡片3 -->
-        <div class="event-card">
+        <!-- 赛事卡片3：跳转到id=3的赛事 -->
+        <div class="event-card" @click="goToDetail(3)">
           <div class="card-image">
-            
             <span class="tag blue">传统体育</span>
             <div class="card-overlay">
               <h3>飞羽争锋</h3>
@@ -77,15 +74,22 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router' // 新增导入路由
 
+const router = useRouter()
 const category = ref('全部品类')
 
-// 空数据 纯等后端接口赋值，无任何固定数字
+// 空数据 等后端接口赋值
 const race1 = ref({})
 const race2 = ref({})
 const race3 = ref({})
 
-// 接口请求位置
+// 新增：点击卡片跳转到赛事详情
+const goToDetail = (id) => {
+  router.push(`/event-detail/${id}`)
+}
+
+// 接口请求位置，等后端列表接口
 const getCompetitionData = async () => {
   // const res = await 后端赛事列表接口
   // race1.value = res[0]
@@ -149,6 +153,11 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  cursor: pointer; /* 加个小手，提示可以点击 */
+  transition: transform 0.2s;
+}
+.event-card:hover {
+  transform: translateY(-4px); /*  hover 上浮效果 */
 }
 .card-image {
   position: relative;

@@ -1,0 +1,196 @@
+<template>
+  <div class="event-detail-container">
+    <div v-if="loading" class="loading">加载中...</div>
+    <div v-else class="detail-content">
+      <div class="detail-card">
+        <div class="category-tag">
+          <span>{{ competitionData.category }}</span>
+          <span>{{ competitionData.type }}</span>
+        </div>
+        <h1>{{ competitionData.title }}</h1>
+        
+        <div class="info-row">
+          <el-icon><Clock /></el-icon>
+          <span>报名时间: {{ formatDate(competitionData.start_time) }} - {{ formatDate(competitionData.end_time) }}</span>
+        </div>
+        <div class="info-row">
+          <el-icon><Location /></el-icon>
+          <span>比赛地点: {{ competitionData.location }}</span>
+        </div>
+        <div class="info-row">
+          <el-icon><User /></el-icon>
+          <span>主办方: {{ competitionData.organizer?.nickname || competitionData.organizer?.username }}</span>
+        </div>
+        <div class="info-row">
+          <el-icon><UserFilled /></el-icon>
+          <span>报名人数: {{ competitionData.current_participants }} / {{ competitionData.max_participants }}</span>
+        </div>
+
+        <div class="section">
+          <h3>赛事规则</h3>
+          <div class="rule-content">
+            <p>{{ competitionData.description }}</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>赛事奖励</h3>
+          <div class="reward-content">
+            <div class="reward-item">
+              <el-icon><Medal /></el-icon>
+              <span>冠军队伍: 奖金 {{ Math.round(competitionData.reward_points * 3) }} 元 + 乐赛平台专属徽章</span>
+            </div>
+            <div class="reward-item">
+              <el-icon><Medal /></el-icon>
+              <span>亚军队伍: 奖金 {{ Math.round(competitionData.reward_points * 1.5) }} 元 + {{ competitionData.reward_points }} 积分奖励</span>
+            </div>
+            <div class="reward-item">
+              <el-icon><Medal /></el-icon>
+              <span>季军队伍: 奖金 {{ Math.round(competitionData.reward_points * 0.8) }} 元</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="register-card">
+        <h3>立即报名</h3>
+        <el-button type="primary" style="width: 100%" @click="goToRegister">
+          我要报名
+        </el-button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { Clock, Location, User, UserFilled, Medal } from '@element-plus/icons-vue'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(true)
+const competitionData = ref({})
+
+// 日期格式化
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+// 加载赛事详情
+const loadCompetitionDetail = async () => {
+  const competitionId = route.params.id || 1
+  try {
+    const res = await axios.get(`http://localhost:8000/api/competition/${competitionId}/`)
+    if (res.data.success) {
+      competitionData.value = res.data.data
+      loading.value = false
+    } else {
+      ElMessage.error('获取赛事详情失败')
+    }
+  } catch (err) {
+    ElMessage.error('请求失败，请检查后端服务')
+    console.error(err)
+  }
+}
+
+// 跳转到报名页
+const goToRegister = () => {
+  router.push(`/event-register/${competitionData.value.id}`)
+}
+
+onMounted(() => {
+  loadCompetitionDetail()
+})
+</script>
+
+<style scoped>
+.event-detail-container {
+  padding: 24px;
+}
+.loading {
+  text-align: center;
+  padding: 100px;
+  font-size: 16px;
+  color: #666;
+}
+.detail-content {
+  display: flex;
+  gap: 24px;
+}
+.detail-card {
+  flex: 2;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+.category-tag {
+  margin-bottom: 12px;
+}
+.category-tag span {
+  padding: 4px 10px;
+  background: #e6f4ff;
+  color: #1677ff;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 8px;
+}
+.detail-card h1 {
+  margin: 0 0 20px;
+  font-size: 24px;
+}
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #666;
+}
+.section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+.section h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #1677ff;
+  border-left: 3px solid #1677ff;
+  padding-left: 12px;
+}
+.rule-content p {
+  margin: 8px 0;
+  color: #333;
+  line-height: 1.6;
+}
+.reward-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  color: #333;
+}
+.reward-item .el-icon {
+  color: #faad14;
+}
+.register-card {
+  flex: 1;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  height: fit-content;
+}
+.register-card h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  border-left: 3px solid #1677ff;
+  padding-left: 12px;
+}
+</style>
