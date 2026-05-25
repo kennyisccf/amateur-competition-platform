@@ -25,10 +25,21 @@ def get_csrf_token(request):
     return JsonResponse({'csrfToken': token})
 urlpatterns = [
     #path("admin/", admin.site.urls),
-    path('api/login/', views.login_api),
-    path('api/register/', views.register_api),
-    path('api/',views.index),
+    path('api/login/', views.login),
+    path('api/register/', views.register),
+    path('api/',views.competition_list),
     path('api/competition/<int:competition_id>/', views.competition_detail),
+    path('api/user/<int:user_id>/', views.user_detail),
+    path(
+        'api/admin/pending_competitions/',
+        views.pending_competitions,
+        name='pending_competitions'
+    ),
+    path(
+        'api/admin/review_competition/',
+        views.review_competition,
+        name='review_competition'
+    ),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]

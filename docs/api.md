@@ -1,5 +1,24 @@
 **乐赛平台接口说明文档**
 
+<<<<<<< HEAD
+## 全局规范
+* **前端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
+
+* **基础路径:** `http://localhost:8000/api`
+
+* **请求头:** 所有需要鉴权的接口，均需要在 Header 中携带 `Authorization: Bearer <your_jwt_token>`
+
+* **全局返回格式:**
+
+    ```json
+    {
+      "code": 200,
+      "message": "success",
+      "data": {}
+    }
+    ```
+
+=======
 **全局规范**
 
 * **基础路径:** http://localhost:8000
@@ -7,6 +26,7 @@
 * **全局返回格式:**
 
 JSON
+>>>>>>> main
 
 {
 
@@ -186,3 +206,17 @@ JSON
 
 }
 
+<<<<<<< HEAD
+1. `player_id` 为当前登录用户 ID，`competition_id` 为要报名的赛事 ID。
+2. 后端会验证：
+   - 用户存在且为选手角色
+   - 赛事存在
+   - 报名人数未超过上限
+   - 用户未重复报名
+3. 前端收到返回 JSON 后，根据 `success` 判断是否报名成功，并展示 `msg` 提示用户。
+4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
+5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
+
+## 
+
+>>>>>>> main
