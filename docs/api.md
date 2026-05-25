@@ -1,6 +1,5 @@
 **乐赛平台接口说明文档**
 
-<<<<<<< HEAD
 ## 全局规范
 * **前端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
 
@@ -18,7 +17,6 @@
     }
     ```
 
-=======
 **全局规范**
 
 * **基础路径:** http://localhost:8000
@@ -26,7 +24,6 @@
 * **全局返回格式:**
 
 JSON
->>>>>>> main
 
 {
 
@@ -206,7 +203,6 @@ JSON
 
 }
 
-<<<<<<< HEAD
 1. `player_id` 为当前登录用户 ID，`competition_id` 为要报名的赛事 ID。
 2. 后端会验证：
    - 用户存在且为选手角色
@@ -219,4 +215,3 @@ JSON
 
 ## 
 
->>>>>>> main
