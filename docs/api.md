@@ -35,11 +35,11 @@ JSON
 
 
 
-**1. 基础模块**
+## **1. 基础模块**
 
 
 
-**1.1 获取 CSRF Token**
+### **1.1 获取 CSRF Token**
 
 * **请求地址:** /csrf/
 * **请求方式:** GET
@@ -58,11 +58,11 @@ JSON
 
 
 
-**2. 用户模块**
+## **2. 用户模块**
 
 
 
-**2.1 用户登录**
+### **2.1 用户登录**
 
 * **请求地址:** /api/login/
 * **请求方式:** POST
@@ -91,7 +91,7 @@ JSON
 
 
 
-**2.2 用户注册**
+### **2.2 用户注册**
 
 * **请求地址:** /api/register/
 * **请求方式:** POST
@@ -121,11 +121,9 @@ JSON
 
 
 
-**3. 赛事模块**
+## **3. 赛事模块**
 
-
-
-**3.1 获取赛事详情**
+### **3.1 获取赛事详情**
 
 * **请求地址:** /api/competition/[int:competition\\\_id](int:competition\\\\_id)/ (例如: /api/competition/1/)
 * **请求方式:** GET
@@ -179,9 +177,9 @@ JSON
 
 }
 
-**3.2 赛事报名**
+### **3.2 赛事报名**
 
-* **请求地址:** /api/submit\_registration/ **(需后端确认实际路由，目前 urls.py 中未配置)**
+* **请求地址:** /api/register_competition/ 
 * **请求方式:** POST
 * **请求格式:** application/json
 * **请求参数:**
@@ -190,6 +188,7 @@ JSON
 |-|-|-|-|
 |player\_id|Integer|是|选手 ID|
 |competition\_id|Integer|是|赛事 ID|
+|invite_code|string|否|私人赛事邀请码|
 
 * **返回结果:**
 
@@ -213,5 +212,218 @@ JSON
 4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
 5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
 
-## 
+### **3.3创建赛事**
+
+- **请求地址:** /api/create_competition/ 
+- **请求方式:**POST
+- **请求格式:**application/json
+- **请求参数:**
+
+| **参数名**       | **类型** | **必填** | **说明**                            |
+| ---------------- | -------- | -------- | ----------------------------------- |
+| title            | string   | 是       | 赛事名称                            |
+| category         | string   | 是       | 赛事种类                            |
+| location         | string   | 是       | 赛事地点                            |
+| description      | string   | 是       | 赛事描述                            |
+| competition_type | string   | 是       | 是否公开，PUBLIC:公开，PRIVATE:私人 |
+| organizer_id     | integer  | 是       | 主办方id                            |
+| max_participants | integer  | 是       | 最大参与人数                        |
+| reward_points    | integer  | 是       | 奖励积分                            |
+| start_time       | datetime | 是       | 开始时间                            |
+| end_time         | datetime | 是       | 结束时间                            |
+
+* **返回结果:**JSON{&#x20; "success": true,&#x20; "msg": "赛事创建成功"}
+
+------
+
+### 3.4 获取待审核赛事
+
+- **请求地址:** `/api/admin/pending_competitions/`
+- **请求方式:** GET
+- **请求格式:** 无
+
+- **请求参数：**无
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "competitions": [
+        {
+            "id": ,
+            "title": "",
+            "category": "",
+            "location": "",
+            "description": "",
+            "max_participants":,
+            "current_participants":,
+            "reward_points":,
+            "start_time": "",
+            "end_time": "",
+            "organizer": {
+                "id": ,
+                "username": "",
+                "nickname": ""
+            }
+        }
+    ]
+}
+```
+
+------
+
+### 3.5 审核赛事
+
+- **请求地址:** `/api/admin/review_competition/`
+- **请求方式:** POST
+- **请求格式:** application/json
+
+- **请求参数:**
+
+| 参数名         | 类型    | 必填 | 说明                             |
+| -------------- | ------- | ---- | -------------------------------- |
+| competition_id | integer | 是   | 赛事ID                           |
+| status         | integer | 是   | 审核结果：1=审核通过，4=审核驳回 |
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "msg": "审核完成"
+}
+```
+
+------
+
+### 3.6 我的赛事
+
+- **请求地址:** `/api/my_competitions/`
+- **请求方式:** GET
+- **请求格式:** Query Params
+
+- **请求参数:**
+
+| 参数名       | 类型    | 必填 | 说明               |
+| ------------ | ------- | ---- | ------------------ |
+| organizer_id | integer | 是   | 主办方ID           |
+| status       | integer | 否   | 赛事状态筛选       |
+| type         | string  | 否   | 赛事类型筛选       |
+| keyword      | string  | 否   | 赛事标题关键词搜索 |
+
+- **请求示例:**
+
+```
+/api/my_competitions/?organizer_id=2&status=1
+```
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "competitions": [
+        {
+            "id":,
+            "title": "",
+            "category": "",
+            "location": "",
+            "description": "",
+            "type": "",
+            "status":,
+            "max_participants": ,
+            "current_participants": ,
+            "reward_points": ,
+            "start_time": "",
+            "end_time": "",
+            "invite_code": "",
+            "reject_reason":
+        }
+    ]
+}
+```
+
+------
+
+### 3.7 删除赛事
+
+- **请求地址:** `/api/competitions/<competition_id>/delete/`
+- **请求方式:** DELETE
+- **请求格式:** 无
+
+- **路径参数:**
+
+| 参数名         | 类型    | 必填 | 说明   |
+| -------------- | ------- | ---- | ------ |
+| competition_id | integer | 是   | 赛事ID |
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "msg": "删除成功"
+}
+```
+
+------
+
+### 3.8 修改赛事
+
+- **请求地址:** `/api/competitions/<competition_id>/update/`
+- **请求方式:** PUT
+- **请求格式:** application/json
+
+- **请求参数**
+
+| 参数名           | 类型    | 必填 | 说明         |
+| ---------------- | ------- | ---- | ------------ |
+| title            | string  | 否   | 赛事名称     |
+| category         | string  | 否   | 赛事分类     |
+| location         | string  | 否   | 赛事地点     |
+| description      | string  | 否   | 赛事描述     |
+| max_participants | integer | 否   | 最大参与人数 |
+| reward_points    | integer | 否   | 奖励积分     |
+
+- **返回结果**
+
+```
+{
+    "success": true,
+    "msg": "修改成功"
+}
+```
+
+------
+
+### 3.9 查看赛事报名情况
+
+- **请求地址:** `/api/competitions/<competition_id>/registrations/`
+- **请求方式:** GET
+- **请求格式:** 无
+
+- **路径参数**
+
+| 参数名         | 类型    | 必填 | 说明   |
+| -------------- | ------- | ---- | ------ |
+| competition_id | integer | 是   | 赛事ID |
+
+- **返回结果**
+
+```
+{
+    "success": true,
+    "registrations": [
+        {
+            "registration_id": ,
+            "player_id": ,
+            "username": "",
+            "nickname": "",
+            "status": ,
+            "registration_time": ""
+        }
+    ]
+}
+```
 

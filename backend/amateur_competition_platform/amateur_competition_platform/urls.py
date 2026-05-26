@@ -25,21 +25,19 @@ def get_csrf_token(request):
     return JsonResponse({'csrfToken': token})
 urlpatterns = [
     #path("admin/", admin.site.urls),
-    path('api/login/', views.login),
-    path('api/register/', views.register),
-    path('api/',views.competition_list),
-    path('api/competition/<int:competition_id>/', views.competition_detail),
-    path('api/user/<int:user_id>/', views.user_detail),
-    path(
-        'api/admin/pending_competitions/',
-        views.pending_competitions,
-        name='pending_competitions'
-    ),
-    path(
-        'api/admin/review_competition/',
-        views.review_competition,
-        name='review_competition'
-    ),
+    path('api/login/', views.login, name='login'),
+    path('api/register/', views.register, name='register'),
+    path('api/',views.competition_list, name='competition_list'),
+    path('api/competition/<int:competition_id>/', views.competition_detail, name='competition_detail'),
+    path('api/user/<int:user_id>/', views.user_detail, name="user_detail"),
+    path('api/register_competition/', views.register_competition, name='register_competition'),
+    path('api/create_competition/',views.create_competition,name='create_competition'),
+    path('api/admin/pending_competitions/', views.pending_competitions, name='pending_competitions'),
+    path('api/admin/review_competition/', views.review_competition, name='review_competition'),
+    path('api/my_competitions/',views.my_competitions),
+    path('api/competitions/<int:competition_id>/delete/',views.delete_competition),
+    path('api/competitions/<int:competition_id>/update/',views.update_competition),
+    path('api/competitions/<int:competition_id>/registrations/',views.competition_registrations),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]
