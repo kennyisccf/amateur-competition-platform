@@ -4,9 +4,12 @@ import Register from '../views/Register.vue'
 import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
 import Profile from '../views/Profile.vue'          
-// 新增导入赛事页面
 import EventDetail from '../views/EventDetail.vue'
 import EventRegister from '../views/EventRegister.vue'
+import CreateCompetition from '../views/CreateCompetition.vue'
+import Workbench from '../views/Workbench.vue'
+import AdminReview from '../views/AdminReview.vue'
+import RegistrationManage from '../views/RegistrationManage.vue'
 
 const routes = [
   {
@@ -24,9 +27,14 @@ const routes = [
     children: [
       { path: 'home', component: Home },
       { path: 'profile', name: 'Profile', component: Profile },
-      // 新增赛事相关路由
       { path: 'event-detail/:id', name: 'EventDetail', component: EventDetail },
-      { path: 'event-register/:id', name: 'EventRegister', component: EventRegister }
+      { path: 'event-register/:id', name: 'EventRegister', component: EventRegister },
+      // 主办方路由
+      { path: 'create', name: 'CreateCompetition', component: CreateCompetition },
+      { path: 'workbench', name: 'Workbench', component: Workbench },
+      { path: 'registration-manage', name: 'RegistrationManage', component: RegistrationManage }, // 新增报名管理路由
+      // 管理员路由
+      { path: 'admin-review', name: 'AdminReview', component: AdminReview }
     ]
   }
 ]

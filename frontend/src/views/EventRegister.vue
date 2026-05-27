@@ -3,15 +3,17 @@
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else class="register-content">
       <div class="competition-info">
+        <a href="javascript:;" @click="router.push('/home')">← 返回赛事大厅</a>
         <h2>{{ competitionData.title }}</h2>
         <p>请填写报名信息，提交参赛申请</p>
+        <div style="color: #666; font-size: 14px;">赛事状态: <span style="color: #52c41a">报名进行中</span></div>
       </div>
 
       <form @submit.prevent="handleSubmitRegister" class="register-form">
         <div class="form-item">
-          <label>选择报名形式</label>
+          <label>报名身份</label>
           <el-select v-model="form.registerType" placeholder="请选择">
-            <el-option label="战队/队伍报名" value="team" />
+            <el-option label="作为战队队长发起报名" value="team" />
             <el-option label="个人报名" value="single" />
           </el-select>
         </div>
@@ -22,8 +24,24 @@
         </div>
 
         <div class="form-item">
-          <label>领队联系电话</label>
-          <el-input v-model="form.phone" placeholder="请输入手机号" />
+          <label>队长/联系人</label>
+          <el-input v-model="form.contactName" placeholder="请填写联系人姓名" />
+        </div>
+
+        <div class="form-item">
+          <label>联系方式(手机/微信)</label>
+          <el-input v-model="form.phone" placeholder="用于接收赛事通知" />
+        </div>
+
+        <div class="form-item">
+          <label>私人赛事邀请码</label>
+          <el-input v-model="form.inviteCode" placeholder="私人赛事请填写，公开赛事留空" />
+        </div>
+
+        <div class="progress-info">
+          <div class="progress-label">报名进度</div>
+          <el-progress :percentage="Math.round(competitionData.current_participants / competitionData.max_participants * 100)" :text-inside="true" />
+          <div class="progress-text">{{ competitionData.current_participants }} / {{ competitionData.max_participants }} 战队</div>
         </div>
 
         <el-button type="primary" native-type="submit" style="width: 100%; margin-top: 24px">
@@ -48,7 +66,9 @@ const competitionData = ref({})
 const form = ref({
   registerType: 'team',
   teamName: '',
-  phone: ''
+  contactName: '',
+  phone: '',
+  inviteCode: ''
 })
 
 // 加载赛事信息
@@ -66,7 +86,7 @@ const loadCompetitionDetail = async () => {
   }
 }
 
-// 提交报名
+// 提交报名，适配新接口地址
 const handleSubmitRegister = async () => {
   if (!form.value.teamName || !form.value.phone) {
     ElMessage.warning('请填写完整报名信息')
@@ -85,12 +105,13 @@ const handleSubmitRegister = async () => {
     const csrfRes = await axios.get('http://localhost:8000/csrf/')
     const csrfToken = csrfRes.data.csrfToken
 
-    // 2. 调用报名接口
+    // 2. 调用新的报名接口
     const res = await axios.post(
-      'http://localhost:8000/api/submit_registration/',  // 后端确认后改这个地址
+      'http://localhost:8000/api/register_competition/',
       {
         player_id: parseInt(userId),
-        competition_id: competitionData.value.id
+        competition_id: competitionData.value.id,
+        invite_code: form.value.inviteCode || null
       },
       {
         headers: {
@@ -120,7 +141,7 @@ onMounted(() => {
 <style scoped>
 .event-register-container {
   padding: 24px;
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto;
 }
 .loading {
@@ -130,16 +151,20 @@ onMounted(() => {
   color: #666;
 }
 .competition-info {
-  text-align: center;
   margin-bottom: 32px;
 }
+.competition-info a {
+  color: #1677ff;
+  text-decoration: none;
+  font-size: 14px;
+}
 .competition-info h2 {
-  margin: 0 0 8px;
+  margin: 12px 0 8px;
   font-size: 24px;
 }
 .competition-info p {
   color: #666;
-  margin: 0;
+  margin: 0 0 8px;
 }
 .register-form {
   background: white;
@@ -155,5 +180,18 @@ onMounted(() => {
   margin-bottom: 8px;
   font-weight: 500;
   color: #333;
+}
+.progress-info {
+  margin-top: 16px;
+}
+.progress-label {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.progress-text {
+  text-align: right;
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
 }
 </style>
