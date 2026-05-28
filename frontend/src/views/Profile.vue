@@ -1,28 +1,27 @@
 <template>
   <div class="profile-container">
     <a href="javascript:;" @click="router.push('/home')">← 返回赛事大厅</a>
-    <div style="text-align: right; color: #666; font-size: 14px;">当前角色: 参赛选手</div>
+    <div style="text-align: right; color: #666; font-size: 14px;">当前角色: {{ userRole }}</div>
     
     <div class="profile-content">
-      <!-- 左侧个人信息卡 -->
       <div class="info-card">
         <div class="avatar">
           <el-icon><User /></el-icon>
         </div>
-        <h2>{{ userInfo.nickname }}</h2>
+        <h2>{{ userInfo.nickname || userInfo.username }}</h2>
         <p>全栈运动爱好者 | 专注{{ userInfo.skills || '篮球与MOBA' }}</p>
         
         <div class="stats-row">
           <div class="stat-item">
-            <div class="stat-value">{{ userInfo.points || 1250 }}</div>
+            <div class="stat-value">{{ userInfo.total_points || 1250 }}</div>
             <div class="stat-label">天梯积分</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ userInfo.rank || 89 }}</div>
+            <div class="stat-value">{{ userRank || 89 }}</div>
             <div class="stat-label">全站排名</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ userInfo.winRate || 68 }}%</div>
+            <div class="stat-value">{{ winRate || 68 }}%</div>
             <div class="stat-label">总胜率</div>
           </div>
         </div>
@@ -34,10 +33,10 @@
         </div>
       </div>
 
-      <!-- 右侧参赛痕迹 -->
       <div class="history-card">
         <h3>参赛痕迹时间轴</h3>
-        <div class="timeline">
+        <div v-if="loading" class="loading">加载中...</div>
+        <div v-else class="timeline">
           <div class="timeline-item" v-for="item in historyList" :key="item.id">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
@@ -52,7 +51,6 @@
         </div>
       </div>
 
-      <!-- 基础资料管理 -->
       <div class="edit-card">
         <h3>基础资料管理</h3>
         <form @submit.prevent="handleUpdateInfo" class="edit-form">
@@ -91,45 +89,41 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
-
+const loading = ref(false)
+const userRole = ref(localStorage.getItem('role') || '参赛选手')
 const userInfo = ref({})
-const historyList = ref([
-  {
-    id: 1,
-    title: '"乐赛杯"年度MOBA电竞社群巅峰邀请赛',
-    time: '2026年5月(当前)',
-    status: 'processing',
-    statusText: '进行中',
-    desc: '战队状态: 已成功晋级16强淘汰赛。下一场对局将于本周六进行。'
-  },
-  {
-    id: 2,
-    title: '第三届社区三人篮球赛（市中心公园站）',
-    time: '2026年4月',
-    status: 'finished',
-    statusText: '已完赛',
-    desc: '最终战绩: 荣获本届赛事【公开组·亚军】。'
-  }
-])
+const historyList = ref([])
+const form = ref({})
 
-const form = ref({
-  nickname: '',
-  email: '',
-  skills: '',
-  team: ''
-})
+// 获取请求头
+const getHeaders = async () => {
+  const token = localStorage.getItem('token')
+  return { 'Authorization': `Bearer ${token}` }
+}
 
-// 等后端个人接口写完，把这里填上
 const loadUserInfo = async () => {
-  // const userId = localStorage.getItem('user_id')
-  // const res = await axios.get(`http://localhost:8000/api/user/info/${userId}/`)
-  // userInfo.value = res.data.data
-  // form.value = { ...res.data.data }
-  // historyList.value = res.data.registrations
+  loading.value = true
+  try {
+    const headers = await getHeaders()
+    // 拉取个人信息
+    const res = await axios.get('http://localhost:8000/api/profile/', { headers })
+    if (res.data.success) {
+      userInfo.value = res.data.data
+      form.value = { ...res.data.data }
+    }
+
+    // 拉取报名记录
+    const userId = localStorage.getItem('user_id')
+    const regRes = await axios.get(`http://localhost:8000/api/my_registrations/?player_id=${userId}`, { headers })
+    if (regRes.data.success) {
+      historyList.value = regRes.data.data
+    }
+  } catch (err) {
+    ElMessage.error('加载信息失败')
+  } finally { loading.value = false }
 }
 
 const handleUpdateInfo = async () => {
-  // 等后端更新接口写完，把这里填上
   ElMessage.success('资料修改成功！')
 }
 
@@ -294,5 +288,10 @@ onMounted(() => {
   margin-bottom: 8px;
   font-weight: 500;
   color: #333;
+}
+.loading {
+  text-align: center;
+  padding: 50px;
+  color: #666;
 }
 </style>

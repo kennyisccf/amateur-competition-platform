@@ -1,7 +1,8 @@
 <template>
-  <div class="create-competition-container">
-    <h2>发起全新赛事</h2>
-    <form @submit.prevent="handleCreate" class="create-form">
+  <div class="edit-container">
+    <h2>修改赛事信息</h2>
+    <div v-if="loading" class="loading">加载中...</div>
+    <form v-else @submit.prevent="handleUpdate" class="edit-form">
       <div class="form-row">
         <div class="form-item">
           <label>赛事名称</label>
@@ -25,30 +26,12 @@
           <el-input v-model="form.location" placeholder="请输入比赛地点" />
         </div>
         <div class="form-item">
-          <label>赛事类型</label>
-          <el-select v-model="form.competition_type" placeholder="请选择">
-            <el-option label="公开赛事" value="PUBLIC" />
-            <el-option label="私人赛事" value="PRIVATE" />
-          </el-select>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-item">
-          <label>开始时间</label>
-          <el-date-picker v-model="form.start_time" type="datetime" placeholder="选择开始时间" />
-        </div>
-        <div class="form-item">
-          <label>结束时间</label>
-          <el-date-picker v-model="form.end_time" type="datetime" placeholder="选择结束时间" />
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-item">
           <label>最大参与人数</label>
           <el-input v-model="form.max_participants" type="number" placeholder="请输入" />
         </div>
+      </div>
+
+      <div class="form-row">
         <div class="form-item">
           <label>奖励积分</label>
           <el-input v-model="form.reward_points" type="number" placeholder="请输入" />
@@ -61,30 +44,22 @@
       </div>
 
       <el-button type="primary" native-type="submit" style="width: 100%; margin-top: 24px">
-        创建赛事
+        保存修改
       </el-button>
     </form>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+const route = useRoute()
 const router = useRouter()
-const form = ref({
-  title: '',
-  category: '',
-  location: '',
-  competition_type: 'PUBLIC',
-  max_participants: '',
-  reward_points: '',
-  start_time: '',
-  end_time: '',
-  description: ''
-})
+const loading = ref(true)
+const form = ref({})
 
 // 获取请求头
 const getHeaders = async () => {
@@ -92,58 +67,72 @@ const getHeaders = async () => {
   const csrfRes = await axios.get('http://localhost:8000/csrf/')
   return {
     'Authorization': `Bearer ${token}`,
-    'X-CSRFToken': csrfRes.data.csrfToken,
-    'Content-Type': 'application/json'
+    'X-CSRFToken': csrfRes.data.csrfToken
   }
 }
 
-const handleCreate = async () => {
-  if (!form.value.title || !form.value.location) {
-    ElMessage.warning('请填写必填项')
-    return
+// 加载原有赛事信息
+const loadCompetition = async () => {
+  const id = route.params.id
+  try {
+    const headers = await getHeaders()
+    const res = await axios.get(`http://localhost:8000/api/competition/${id}/`, { headers })
+    if (res.data.success) {
+      form.value = {
+        title: res.data.data.title,
+        category: res.data.data.category,
+        location: res.data.data.location,
+        max_participants: res.data.data.max_participants,
+        reward_points: res.data.data.reward_points,
+        description: res.data.data.description
+      }
+      loading.value = false
+    }
+  } catch (err) {
+    ElMessage.error('加载赛事信息失败')
+    console.error(err)
   }
+}
 
-  const userId = localStorage.getItem('user_id')
-  if (!userId) {
-    ElMessage.warning('请先登录')
-    router.push('/login')
+// 提交修改
+const handleUpdate = async () => {
+  const id = route.params.id
+  if (!form.value.title) {
+    ElMessage.warning('请填写赛事名称')
     return
   }
 
   try {
     const headers = await getHeaders()
-    const res = await axios.post(
-      'http://localhost:8000/api/create_competition/',
-      {
-        ...form.value,
-        organizer_id: parseInt(userId)
-      },
+    const res = await axios.put(
+      `http://localhost:8000/api/competitions/${id}/update/`,
+      form.value,
       { headers }
     )
-
     if (res.data.success) {
-      ElMessage.success('赛事创建成功！')
+      ElMessage.success('修改成功')
       router.push('/workbench')
-    } else {
-      ElMessage.error(res.data.msg || '创建失败')
     }
   } catch (err) {
-    ElMessage.error('请求失败，请检查后端服务')
-    console.error(err)
+    ElMessage.error('修改失败')
   }
 }
+
+onMounted(() => {
+  loadCompetition()
+})
 </script>
 
 <style scoped>
-.create-competition-container {
+.edit-container {
   padding: 24px;
   max-width: 900px;
   margin: 0 auto;
 }
-.create-competition-container h2 {
+.edit-container h2 {
   margin: 0 0 24px;
 }
-.create-form {
+.edit-form {
   background: white;
   padding: 32px;
   border-radius: 12px;
@@ -162,5 +151,10 @@ const handleCreate = async () => {
   margin-bottom: 8px;
   font-weight: 500;
   color: #333;
+}
+.loading {
+  text-align: center;
+  padding: 50px;
+  color: #666;
 }
 </style>

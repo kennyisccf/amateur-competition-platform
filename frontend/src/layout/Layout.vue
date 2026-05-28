@@ -26,24 +26,17 @@
             <el-icon><User /></el-icon>
             <span>我的运动档案</span>
           </el-menu-item>
-          <el-menu-item index="/event-detail">
-            <el-icon><InfoFilled /></el-icon>
-            <span>赛事详情</span>
-          </el-menu-item>
-          <el-menu-item index="/event-register">
-            <el-icon><Edit /></el-icon>
-            <span>赛事报名</span>
-          </el-menu-item>
         </el-menu>
       </div>
 
-      <!-- 主办方专区 -->
-      <div class="menu-group">
+      <!-- 主办方专区：仅主办方/管理员可见 -->
+      <div class="menu-group" v-if="userRole === '主办方' || userRole === '管理员'">
         <div class="menu-title">主办方专区</div>
         <el-menu
           background-color="#1677ff"
           text-color="#fff"
           active-text-color="#fff"
+          router
         >
           <el-menu-item index="/create">
             <el-icon><Plus /></el-icon>
@@ -52,6 +45,26 @@
           <el-menu-item index="/workbench">
             <el-icon><Tools /></el-icon>
             <span>赛事工作台</span>
+          </el-menu-item>
+          <el-menu-item index="/registration-manage">
+            <el-icon><List /></el-icon>
+            <span>报名管理</span>
+          </el-menu-item>
+        </el-menu>
+      </div>
+
+      <!-- 管理员专区：仅管理员可见 -->
+      <div class="menu-group" v-if="userRole === '管理员'">
+        <div class="menu-title">管理员专区</div>
+        <el-menu
+          background-color="#1677ff"
+          text-color="#fff"
+          active-text-color="#fff"
+          router
+        >
+          <el-menu-item index="/admin-review">
+            <el-icon><Setting /></el-icon>
+            <span>审核与风控</span>
           </el-menu-item>
         </el-menu>
       </div>
@@ -67,7 +80,15 @@
 </template>
 
 <script setup>
-import { Trophy, User, Plus, Tools, InfoFilled, Edit } from '@element-plus/icons-vue'
+import { ref, onMounted } from 'vue'
+import { Trophy, User, Plus, Tools, List, Setting } from '@element-plus/icons-vue'
+
+const userRole = ref('')
+
+onMounted(() => {
+  // 从本地获取用户角色，用于菜单权限
+  userRole.value = localStorage.getItem('role') || ''
+})
 </script>
 
 <style scoped>

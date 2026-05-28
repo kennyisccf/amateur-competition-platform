@@ -50,16 +50,25 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { get } from '@/utils/request' // 复用之前的请求封装
+import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const loading = ref(false)
-const myCompetitions = ref([]) // 主办方自己创建的赛事列表
-const selectedCompetitionId = ref('') // 选中的赛事ID
-const registrations = ref([]) // 报名列表数据
+const myCompetitions = ref([])
+const selectedCompetitionId = ref('')
+const registrations = ref([])
 
-// 格式化报名状态
+// 获取请求头
+const getHeaders = async () => {
+  const token = localStorage.getItem('token')
+  const csrfRes = await axios.get('http://localhost:8000/csrf/')
+  return {
+    'Authorization': `Bearer ${token}`,
+    'X-CSRFToken': csrfRes.data.csrfToken
+  }
+}
+
 const formatStatus = (row) => {
   const statusMap = {
     1: '待审核',
@@ -68,14 +77,12 @@ const formatStatus = (row) => {
   }
   return statusMap[row.status] || '未知状态'
 }
-
-// 格式化时间
 const formatTime = (row) => {
   if (!row.registration_time) return '-'
   return new Date(row.registration_time).toLocaleString()
 }
 
-// 拉取主办方自己的赛事列表（对接 /api/my_competitions/）
+// 拉取主办方自己的赛事列表
 const fetchMyCompetitions = async () => {
   const organizerId = localStorage.getItem('user_id')
   if (!organizerId) {
@@ -85,37 +92,29 @@ const fetchMyCompetitions = async () => {
   }
 
   try {
-    const res = await get(`/api/my_competitions/`, { organizer_id: organizerId })
-    if (res.success) {
-      myCompetitions.value = res.competitions
-    } else {
-      ElMessage.error(res.msg || '获取赛事列表失败')
+    const headers = await getHeaders()
+    const res = await axios.get(`http://localhost:8000/api/my_competitions/?organizer_id=${organizerId}`, { headers })
+    if (res.data.success) {
+      myCompetitions.value = res.data.competitions
     }
   } catch (err) {
     ElMessage.error('网络请求失败')
-    console.error(err)
   }
 }
 
-// 拉取选中赛事的报名列表（对接 /api/competitions/<id>/registrations/）
+// 拉取报名列表
 const fetchRegistrations = async () => {
   if (!selectedCompetitionId.value) return
-
   loading.value = true
   try {
-    const res = await get(`/api/competitions/${selectedCompetitionId.value}/registrations/`)
-    if (res.success) {
+    const headers = await getHeaders()
+    const res = await axios.get(`http://localhost:8000/api/competitions/${selectedCompetitionId.value}/registrations/`, { headers })
+    if (res.data.success) {
       registrations.value = res.registrations
-    } else {
-      ElMessage.error(res.msg || '获取报名信息失败')
-      registrations.value = []
     }
   } catch (err) {
     ElMessage.error('网络请求失败')
-    registrations.value = []
-  } finally {
-    loading.value = false
-  }
+  } finally { loading.value = false }
 }
 
 onMounted(() => {
