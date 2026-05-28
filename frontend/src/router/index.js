@@ -10,6 +10,7 @@ import CreateCompetition from '../views/CreateCompetition.vue'
 import Workbench from '../views/Workbench.vue'
 import AdminReview from '../views/AdminReview.vue'
 import RegistrationManage from '../views/RegistrationManage.vue'
+import CompetitionEdit from '../views/CompetitionEdit.vue' 
 
 const routes = [
   {
@@ -29,11 +30,10 @@ const routes = [
       { path: 'profile', name: 'Profile', component: Profile },
       { path: 'event-detail/:id', name: 'EventDetail', component: EventDetail },
       { path: 'event-register/:id', name: 'EventRegister', component: EventRegister },
-      // 主办方路由
       { path: 'create', name: 'CreateCompetition', component: CreateCompetition },
       { path: 'workbench', name: 'Workbench', component: Workbench },
-      { path: 'registration-manage', name: 'RegistrationManage', component: RegistrationManage }, // 新增报名管理路由
-      // 管理员路由
+      { path: 'registration-manage', name: 'RegistrationManage', component: RegistrationManage },
+      { path: 'competition-edit/:id', name: 'CompetitionEdit', component: CompetitionEdit }, 
       { path: 'admin-review', name: 'AdminReview', component: AdminReview }
     ]
   }
