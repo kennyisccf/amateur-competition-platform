@@ -1,7 +1,7 @@
 **乐赛平台接口说明文档**
 
 ## 全局规范
-* **前端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
+* **后端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
 
 * **基础路径:** `http://localhost:8000/api`
 
@@ -16,22 +16,6 @@
       "data": {}
     }
     ```
-
-**全局规范**
-
-* **基础路径:** http://localhost:8000
-* **鉴权方式:** 目前暂未使用 JWT。如果是本地开发，跨域 POST 请求可能需要携带 CSRF Token，请先调用 /csrf/ 接口获取并在 Header 中携带 X-CSRFToken。
-* **全局返回格式:**
-
-JSON
-
-{
-
-&#x20; "success": true, // 或 false
-
-&#x20; "msg": "提示信息" // 部分接口为 data
-
-}
 
 
 
@@ -66,7 +50,7 @@ JSON
 
 * **请求地址:** /api/login/
 * **请求方式:** POST
-* **请求格式:** application/json (Raw JSON)
+* **请求格式:** application/json
 * **请求参数:**
 
 |**参数名**|**类型**|**必填**|**说明**|
@@ -87,6 +71,8 @@ JSON
 
 &#x20; "user\_id": 1
 
+&#x20; "token": "jwt_token_string"
+
 }
 
 
@@ -95,7 +81,7 @@ JSON
 
 * **请求地址:** /api/register/
 * **请求方式:** POST
-* **请求格式:** multipart/form-data 或 application/x-www-form-urlencoded **(注意：这里不是 JSON)**
+* **请求格式:** multipart/form-data 或 application/x-www-form-urlencoded
 * **请求参数:**
 
 |**参数名**|**类型**|**必填**|**说明**|
@@ -212,7 +198,7 @@ JSON
 4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
 5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
 
-### **3.3创建赛事**
+### **3.3 创建赛事**
 
 - **请求地址:** /api/create_competition/ 
 - **请求方式:**POST
@@ -232,72 +218,21 @@ JSON
 | start_time       | datetime | 是       | 开始时间                            |
 | end_time         | datetime | 是       | 结束时间                            |
 
-* **返回结果:**JSON{&#x20; "success": true,&#x20; "msg": "赛事创建成功"}
+* **返回结果:**
 
-------
+JSON
 
-### 3.4 获取待审核赛事
-
-- **请求地址:** `/api/admin/pending_competitions/`
-- **请求方式:** GET
-- **请求格式:** 无
-
-- **请求参数：**无
-
-- **返回结果:**
-
-```
 {
-    "success": true,
-    "competitions": [
-        {
-            "id": ,
-            "title": "",
-            "category": "",
-            "location": "",
-            "description": "",
-            "max_participants":,
-            "current_participants":,
-            "reward_points":,
-            "start_time": "",
-            "end_time": "",
-            "organizer": {
-                "id": ,
-                "username": "",
-                "nickname": ""
-            }
-        }
-    ]
+
+  "success": true,
+  "msg": "赛事创建成功"
+
 }
-```
 
 ------
 
-### 3.5 审核赛事
 
-- **请求地址:** `/api/admin/review_competition/`
-- **请求方式:** POST
-- **请求格式:** application/json
-
-- **请求参数:**
-
-| 参数名         | 类型    | 必填 | 说明                             |
-| -------------- | ------- | ---- | -------------------------------- |
-| competition_id | integer | 是   | 赛事ID                           |
-| status         | integer | 是   | 审核结果：1=审核通过，4=审核驳回 |
-
-- **返回结果:**
-
-```
-{
-    "success": true,
-    "msg": "审核完成"
-}
-```
-
-------
-
-### 3.6 我的赛事
+### 3.4 我的赛事
 
 - **请求地址:** `/api/my_competitions/`
 - **请求方式:** GET
@@ -346,7 +281,7 @@ JSON
 
 ------
 
-### 3.7 删除赛事
+### 3.5 删除赛事
 
 - **请求地址:** `/api/competitions/<competition_id>/delete/`
 - **请求方式:** DELETE
@@ -369,7 +304,7 @@ JSON
 
 ------
 
-### 3.8 修改赛事
+### 3.6 修改赛事
 
 - **请求地址:** `/api/competitions/<competition_id>/update/`
 - **请求方式:** PUT
@@ -397,7 +332,7 @@ JSON
 
 ------
 
-### 3.9 查看赛事报名情况
+### 3.7 查看赛事报名情况
 
 - **请求地址:** `/api/competitions/<competition_id>/registrations/`
 - **请求方式:** GET
@@ -426,4 +361,204 @@ JSON
     ]
 }
 ```
+
+
+## **4. 个人档案模块**
+
+
+
+### **4.1 获取个人信息与积分**
+
+* **请求地址:** /api/profile/
+* **请求方式:** GET
+* **请求格式:** 无
+
+* **返回结果:**
+
+{ 
+
+  "success": true,
+  "data": {
+    "user_id": ,
+    "username": "",
+    "nickname": "",
+    "role": "",
+    "total_points": 
+  }
+
+}
+
+
+### **4.2 获取我的报名记录**
+
+* **请求地址:** /api/my_registrations/
+* **请求方式:** GET
+* **请求格式:** 无
+
+- **路径参数**
+
+| 参数名    | 类型    | 必填 | 说明   |
+| ----------| ------- | ---- | ------ |
+| player_id | integer | 是   | 玩家ID |
+
+* **返回结果:**
+
+{ 
+
+  "success": true,
+  "data": {
+    "user_id": ,
+    "username": "",
+    "nickname": "",
+    "role": "",
+    "total_points": 
+  }
+
+}
+
+
+## **5. 管理员模块**
+
+
+### 5.1 获取待审核赛事
+
+- **请求地址:** `/api/admin/pending_competitions/`
+- **请求方式:** GET
+- **请求格式:** 无
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "competitions": [
+        {
+            "id": ,
+            "title": "",
+            "category": "",
+            "location": "",
+            "description": "",
+            "max_participants":,
+            "current_participants":,
+            "reward_points":,
+            "start_time": "",
+            "end_time": "",
+            "organizer": {
+                "id": ,
+                "username": "",
+                "nickname": ""
+            }
+        }
+    ]
+}
+```
+
+
+### 5.2 审核赛事
+
+- **请求地址:** `/api/admin/review_competition/`
+- **请求方式:** POST
+- **请求格式:** application/json
+
+- **请求参数:**
+
+| 参数名         | 类型    | 必填 | 说明                             |
+| -------------- | ------- | ---- | -------------------------------- |
+| competition_id | integer | 是   | 赛事ID                           |
+| status         | integer | 是   | 审核结果：1=审核通过，4=审核驳回 |
+| reason         | String  | 否   | 驳回原因 |
+
+
+- **返回结果:**
+
+```
+{
+    "success": true,
+    "msg": "审核完成"
+}
+```
+
+
+### 5.3 获取用户列表
+
+- **请求地址:** `/api/admin/users/`
+- **请求方式:** GET
+- **请求格式:** 无
+
+
+- **返回结果:**
+
+```
+{
+  "success": true,
+  "users": [
+    {
+      "user_id": ,
+      "username": "",
+      "role": "",
+      "is_active": ,
+      "created_at": ""
+    }
+  ]
+}
+
+
+```
+
+
+### 5.4 封禁/解封用户
+
+- **请求地址:** `/api/admin/users/<int:user_id>/status/`
+- **请求方式:** PUT
+- **请求格式:** application/json
+
+- **请求参数:**
+
+| 参数名     | 类型    | 必填 | 说明                  |
+| ----------| ------- | ---- | -------------------- |
+| is_active | Boolean | 是   | true=解封，false=封禁 |
+
+
+
+- **返回结果:**
+
+```
+{
+  "success": true,
+  "msg": "用户状态更新成功"
+}  
+
+
+```
+
+### 5.5 获取审核记录
+
+- **请求地址:** `/api/admin/audit_records/`
+- **请求方式:** GET
+- **请求格式:** 无
+
+
+
+- **返回结果:**
+
+```
+{
+  "success": true,
+  "records": [
+    {
+      "record_id": ,
+      "competition_id": ,
+      "admin_id": ,
+      "action": "审核通过",
+      "created_at": ""
+    }
+  ]
+}
+
+
+```
+
+
+
+
 

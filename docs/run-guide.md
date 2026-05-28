@@ -29,11 +29,11 @@ cd backend/amateur_competition_platform
 
 2.创建并激活虚拟环境（推荐）：
 
-   创建虚拟环境
-   python -m venv venv
+   * 创建虚拟环境：python -m venv venv
    
-   Windows 激活:
-   venv\Scripts\activate
+   * Windows 激活: venv\Scripts\activate
+
+   * Mac/Linux 激活：source venv/bin/activate
 
    
 3.安装依赖包：
@@ -59,3 +59,31 @@ python manage.py migrate
 python manage.py runserver
 默认后端访问地址为：http://localhost:8000
 
+
+# 四、 前端运行 (Vue3 + Vite)
+
+1.进入前端目录：
+
+cd frontend
+
+2.安装前端项目依赖：
+
+   npm install
+   
+3.启动前端开发服务器：
+
+   npm run dev
+
+     默认前端访问地址为：http://localhost:5173
+
+
+   
+# 五、 测试账号
+
+为方便验收与测试，数据库中已预置以下测试账号（需由测试负责人路良钧初始化）：
+
+* 选手测试账号: 账号: [待补充] / 密码: [待补充]
+
+* 主办方测试账号: 账号: [待补充] / 密码: [待补充]
+
+* 管理员测试账号: 账号: [待补充] / 密码: [待补充]
