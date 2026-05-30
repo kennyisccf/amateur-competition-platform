@@ -66,7 +66,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-
+import request from '@/utils/request'
 const router = useRouter()
 
 // 角色列表，对应接口要求的中文role
@@ -84,20 +84,55 @@ const form = ref({
 })
 
 // 登录处理
+// const handleLogin = async () => {
+  // if (!form.value.username || !form.value.password) {
+    // ElMessage.warning('请输入用户名和密码')
+    // return
+  // }
+// 
+  // try {
+    // const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    // const csrfToken = csrfRes.data.csrfToken
+// 
+    // const res = await axios.post(
+      // 'http://localhost:8000/api/login/',
+      // {
+        // username: form.value.username,
+        // password: form.value.password,
+        // role: selectedRole.value,
+        // 
+      // },
+      // {
+        // headers: {
+          // 'X-CSRFToken': csrfToken,
+          // 'Content-Type': 'application/json'
+        // }
+      // }
+    // )
+// 
+    // if (res.data.success) {
+      // ElMessage.success('登录成功')
+      //保存用户ID，后续报名接口需要
+      // localStorage.setItem('user_id', res.data.user_id)
+      // router.push('/home')
+    // } else {
+      // ElMessage.error(res.data.msg || '登录失败')
+    // }
+  // } catch (err) {
+    // ElMessage.error('请求失败，请检查后端服务是否启动')
+    // console.error(err)
+  // }
+// }
 const handleLogin = async () => {
   if (!form.value.username || !form.value.password) {
     ElMessage.warning('请输入用户名和密码')
     return
   }
-
   try {
-    // 1. 获取CSRF Token
-    const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    const csrfRes = await request.get('/csrf/')
     const csrfToken = csrfRes.data.csrfToken
-
-    // 2. 调用登录接口
-    const res = await axios.post(
-      'http://localhost:8000/api/login/',
+    const res = await request.post(
+      '/api/login/',
       {
         username: form.value.username,
         password: form.value.password,
@@ -105,23 +140,24 @@ const handleLogin = async () => {
       },
       {
         headers: {
-          'X-CSRFToken': csrfToken,
-          'Content-Type': 'application/json'
+          'X-CSRFToken': csrfToken
         }
       }
     )
-
     if (res.data.success) {
       ElMessage.success('登录成功')
-      // 保存用户ID，后续报名接口需要
-      localStorage.setItem('user_id', res.data.user_id)
+      localStorage.setItem(
+        'user_id',
+        res.data.user_id
+      )
       router.push('/home')
     } else {
       ElMessage.error(res.data.msg || '登录失败')
     }
-  } catch (err) {
-    ElMessage.error('请求失败，请检查后端服务是否启动')
+  }
+  catch (err) {
     console.error(err)
+    ElMessage.error('请求失败，请检查后端服务')
   }
 }
 </script>

@@ -1,7 +1,7 @@
 <template>
   <div class="profile-container">
     <a href="javascript:;" @click="router.push('/home')">← 返回赛事大厅</a>
-    <div style="text-align: right; color: #666; font-size: 14px;">当前角色: {{ userRole }}</div>
+    <div style="text-align: right; color: #666; font-size: 14px;"></div>
     
     <div class="profile-content">
       <div class="info-card">
@@ -9,28 +9,28 @@
           <el-icon><User /></el-icon>
         </div>
         <h2>{{ userInfo.nickname || userInfo.username }}</h2>
-        <p>全栈运动爱好者 | 专注{{ userInfo.skills || '篮球与MOBA' }}</p>
+        <!-- <p>全栈运动爱好者 | 专注{{ userInfo.skills || '篮球与MOBA' }}</p> -->
         
-        <div class="stats-row">
-          <div class="stat-item">
-            <div class="stat-value">{{ userInfo.total_points || 1250 }}</div>
-            <div class="stat-label">天梯积分</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ userRank || 89 }}</div>
-            <div class="stat-label">全站排名</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ winRate || 68 }}%</div>
-            <div class="stat-label">总胜率</div>
-          </div>
-        </div>
+        <!-- <div class="stats-row"> -->
+          <!-- <div class="stat-item"> -->
+            <!-- <div class="stat-value">{{ userInfo.total_points}}</div> -->
+            <!-- <div class="stat-label">天梯积分</div> -->
+          <!-- </div> -->
+          <!-- <div class="stat-item"> -->
+            <!-- <div class="stat-value">{{ userRank}}</div> -->
+            <!-- <div class="stat-label">全站排名</div> -->
+          <!-- </div> -->
+          <!-- <div class="stat-item"> -->
+            <!-- <div class="stat-value">{{ winRate}}%</div> -->
+            <!-- <div class="stat-label">总胜率</div> -->
+          <!-- </div> -->
+        <!-- </div> -->
 
-        <div class="badges-row">
-          <span class="badge">🏀 街球中流砥柱</span>
-          <span class="badge">🎮 零失误控场</span>
-          <span class="badge">✨ 活跃达人</span>
-        </div>
+        <!-- <div class="badges-row"> -->
+          <!-- <span class="badge">🏀 街球中流砥柱</span> -->
+          <!-- <span class="badge">🎮 零失误控场</span> -->
+          <!-- <span class="badge">✨ 活跃达人</span> -->
+        <!-- </div> -->
       </div>
 
       <div class="history-card">
@@ -51,31 +51,53 @@
         </div>
       </div>
 
-      <div class="edit-card">
-        <h3>基础资料管理</h3>
-        <form @submit.prevent="handleUpdateInfo" class="edit-form">
-          <div class="form-row">
-            <div class="form-item">
-              <label>选手昵称</label>
-              <el-input v-model="form.nickname" />
-            </div>
-            <div class="form-item">
-              <label>绑定邮箱</label>
-              <el-input v-model="form.email" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-item">
-              <label>擅长项目</label>
-              <el-input v-model="form.skills" />
-            </div>
-            <div class="form-item">
-              <label>所属常驻战队</label>
-              <el-input v-model="form.team" />
-            </div>
-          </div>
-          <el-button type="primary" native-type="submit">保存资料修改</el-button>
-        </form>
+      <!-- <div class="edit-card"> -->
+        <!-- <h3>基础资料管理</h3> -->
+        <!-- <form @submit.prevent="handleUpdateInfo" class="edit-form"> -->
+          <!-- <div class="form-row"> -->
+            <!-- <div class="form-item"> -->
+              <!-- <label>选手昵称</label> -->
+              <!-- <el-input v-model="form.nickname" /> -->
+            <!-- </div> -->
+            <!-- <div class="form-item"> -->
+              <!-- <label>绑定邮箱</label> -->
+              <!-- <el-input v-model="form.email" /> -->
+            <!-- </div> -->
+          <!-- </div> -->
+          <!-- <div class="form-row"> -->
+            <!-- <div class="form-item"> -->
+              <!-- <label>擅长项目</label> -->
+              <!-- <el-input v-model="form.skills" /> -->
+            <!-- </div> -->
+            <!-- <div class="form-item"> -->
+              <!-- <label>所属常驻战队</label> -->
+              <!-- <el-input v-model="form.team" /> -->
+            <!-- </div> -->
+          <!-- </div> -->
+          <!-- <el-button type="primary" native-type="submit">保存资料修改</el-button> -->
+        <!-- </form> -->
+      <!-- </div> -->
+       <div class="edit-card">
+          <h3>个人资料</h3>
+          <el-form :model="form" label-width="90px">
+          <el-form-item label="用户名">
+            <el-input :value="userInfo.username" disabled/>
+          </el-form-item>
+          <el-form-item label="昵称">
+            <el-input v-model="form.nickname"/>
+          </el-form-item>
+          <el-form-item label="邮箱">
+            <el-input v-model="form.email"/>
+          </el-form-item>
+          <el-form-item label="身份">
+            <el-tag> {{ userRole }}</el-tag>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="handleUpdateInfo">
+              保存修改
+            </el-button>
+          </el-form-item>
+        </el-form>
       </div>
     </div>
   </div>
@@ -87,7 +109,7 @@ import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-
+import request from '@/utils/request'
 const router = useRouter()
 const loading = ref(false)
 const userRole = ref(localStorage.getItem('role') || '参赛选手')
@@ -95,36 +117,59 @@ const userInfo = ref({})
 const historyList = ref([])
 const form = ref({})
 
-// 获取请求头
-const getHeaders = async () => {
-  const token = localStorage.getItem('token')
-  return { 'Authorization': `Bearer ${token}` }
-}
 
+// 获取请求
 const loadUserInfo = async () => {
   loading.value = true
   try {
-    const headers = await getHeaders()
-    // 拉取个人信息
-    const res = await axios.get('http://localhost:8000/api/profile/', { headers })
+    const res = await axios.get(
+      'http://localhost:8000/api/user/',
+      {
+        withCredentials: true
+      }
+    )
     if (res.data.success) {
       userInfo.value = res.data.data
-      form.value = { ...res.data.data }
+      form.value = {
+        nickname: res.data.data.nickname,
+        email: res.data.data.email
+      }
+      userRole.value = res.data.data.role
     }
-
-    // 拉取报名记录
-    const userId = localStorage.getItem('user_id')
-    const regRes = await axios.get(`http://localhost:8000/api/my_registrations/?player_id=${userId}`, { headers })
+    const regRes = await axios.get(
+      'http://localhost:8000/api/my_registrations/',
+      {
+        withCredentials: true
+      }
+    )
     if (regRes.data.success) {
       historyList.value = regRes.data.data
     }
-  } catch (err) {
-    ElMessage.error('加载信息失败')
-  } finally { loading.value = false }
+  } catch (error) {
+    ElMessage.error('加载用户信息失败')
+  } finally {
+    loading.value = false
+  }
 }
-
 const handleUpdateInfo = async () => {
-  ElMessage.success('资料修改成功！')
+  try {
+    const res = await axios.put(
+      'http://localhost:8000/api/update_user/',
+      {
+        nickname: form.value.nickname,
+        email: form.value.email
+      },
+      {
+        withCredentials: true
+      }
+    )
+    if (res.data.success) {
+      ElMessage.success('资料修改成功')
+      loadUserInfo()
+    }
+  } catch (error) {
+    ElMessage.error('修改失败')
+  }
 }
 
 onMounted(() => {

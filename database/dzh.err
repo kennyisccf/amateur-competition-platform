@@ -48,3 +48,6 @@
 2026-05-23T14:48:20.218242Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
 2026-05-23T14:48:20.333256Z 0 [System] [MY-010931] [Server] D:\mysql\mysql-8.4.0-winx64\bin\mysqld.exe: ready for connections. Version: '8.4.0'  socket: ''  port: 3306  MySQL Community Server - GPL.
 2026-05-23T14:48:20.621758Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
+2026-05-30T02:54:24.843560Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-05-30T02:54:25.041014Z 0 [System] [MY-010116] [Server] D:\mysql\mysql-8.4.0-winx64\bin\mysqld.exe (mysqld 8.4.0) starting as process 28464
+2026-05-30T02:54:25.177038Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
