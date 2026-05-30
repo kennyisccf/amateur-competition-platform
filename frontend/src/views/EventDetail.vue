@@ -5,7 +5,7 @@
       <div class="detail-card">
         <div class="category-tag">
           <span>{{ competitionData.category }}</span>
-          <span>{{ competitionData.type }}</span>
+          <span>{{ competitionData.type === 'PRIVATE' ? '私人赛' : '公开赛' }}</span>
         </div>
         <h1>{{ competitionData.title }}</h1>
         

@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import string
 import random
+from functools import wraps
 @csrf_exempt
 def login(request):
     if request.method != "POST":
@@ -29,7 +30,23 @@ def login(request):
     password_md5 = hashlib.md5(password.encode()).hexdigest()
     if user.password != password_md5:
         return JsonResponse({"success": False, "msg": "密码错误"})
+    request.session["user_id"] = user.id
+    request.session["username"] = user.username
+    request.session["role"] = user.role
     return JsonResponse({"success": True, "msg": "登录成功", "user_id": user.id})
+
+@csrf_exempt
+def logout(request):
+    request.session.flush()
+    return JsonResponse({"success": True, "msg": "退出登录"})
+
+def login_required(func):
+    @wraps(func)
+    def wrapper(request, *args, **kwargs):
+        if not request.session.get("user_id"):
+            return JsonResponse({"success": False, "msg": "请先登录"}, status=401)
+        return func(request, *args, **kwargs)
+    return wrapper
 
 @csrf_exempt
 def register(request):
@@ -65,14 +82,18 @@ def register(request):
 
 
 def competition_list(request):
-    c_type = request.GET.get('type', '')
-    c_status = request.GET.get('status', '')
-    competitions = models.Competition.objects.all()
-    if c_type:
-        competitions = competitions.filter(type=c_type)
-    if c_status:
-        competitions = competitions.filter(status=c_status)
-    competitions = competitions.order_by('-created_at')
+    c_category = request.GET.get("category", "")
+    keyword = request.GET.get("keyword", "")
+    competitions = models.Competition.objects.filter(
+        status=1
+    )
+    if c_category:
+        competitions = competitions.filter(category__icontains=c_category)
+    if keyword:
+        competitions = competitions.filter(
+            title__icontains=keyword
+        )
+    competitions = competitions.order_by("-created_at")
     data = []
     for c in competitions:
         data.append({
@@ -86,17 +107,19 @@ def competition_list(request):
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
-            "start_time": c.start_time,
-            "end_time": c.end_time,
-            "created_at": c.created_at,
+            "start_time": c.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": c.end_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "organizer": {
                 "id": c.organizer.id,
                 "username": c.organizer.username,
                 "nickname": c.organizer.nickname
             }
         })
-    return JsonResponse({"success": True, "competitions": data})
-
+    return JsonResponse({
+        "success": True,
+        "competitions": data
+    })
 
 def competition_detail(request, competition_id):
     competition = models.Competition.objects.filter(id=competition_id).first()
@@ -118,13 +141,19 @@ def competition_detail(request, competition_id):
         "reward_points": getattr(competition, "reward_points", 100),
         "start_time": competition.start_time,
         "end_time": competition.end_time,
-        "created_at": competition.created_at
+        "created_at": competition.created_at.strftime("%Y-%m-%d %H:%M:%S"),
     }
     return JsonResponse({"success": True, "data": data})
 
 @csrf_exempt
-def user_detail(request, user_id):
+@login_required
+def user_detail(request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "msg": "未登录"})
     user = models.User.objects.filter(id=user_id).first()
+    if not user:
+        return JsonResponse({"success": False,"msg": "用户不存在"})
     data = {
         "id": user.id,
         "username": user.username,
@@ -132,10 +161,26 @@ def user_detail(request, user_id):
         "email": user.email,
         "role": user.role,
         "points": user.points,
-        "created_at": user.created_at,
+        "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         "is_deleted": user.is_deleted,
     }
     return JsonResponse({"success": True, "data": data})
+
+@login_required
+@csrf_exempt
+def update_user(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "请求方式错误"})
+    try:
+        data = json.loads(request.body)
+        user_id = request.session.get("user_id")
+        user = models.User.objects.filter(id=user_id).first()
+        user.nickname = data.get("nickname", user.nickname)
+        user.email = data.get("email", user.email)
+        user.save()
+        return JsonResponse({"success": True, "msg": "修改成功"})
+    except Exception as e:
+        return JsonResponse({"success": False, "msg": "修改失败"})
 
 @csrf_exempt
 def register_competition(request):
@@ -357,3 +402,32 @@ def competition_registrations(request, competition_id):
             "registration_time": r.registration_time
         })
     return JsonResponse({"success": True,"registrations": data})
+
+@login_required
+@csrf_exempt
+def my_registrations(request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "msg": "未登录"})
+    registrations = models.Registration.objects.filter(player=user_id).select_related("competition")
+    result = []
+    for reg in registrations:
+        status_map = {
+            0: "审核中",
+            1: "报名成功",
+            2: "已驳回"
+        }
+        result.append({
+            "id": reg.id,
+            "title": reg.competition.title,
+            "time": reg.registration_time.strftime(
+                "%Y-%m-%d %H:%M"
+            ),
+            "desc": reg.audit_remark or "",
+            "status":
+                "finished" if reg.status == 1
+                else "processing",
+            "statusText":
+                status_map.get(reg.status)
+        })
+    return JsonResponse({"success": True,"data": result})

@@ -26,10 +26,12 @@ def get_csrf_token(request):
 urlpatterns = [
     #path("admin/", admin.site.urls),
     path('api/login/', views.login, name='login'),
+    path('api/logout/', views.logout, name='logout'),
     path('api/register/', views.register, name='register'),
-    path('api/',views.competition_list, name='competition_list'),
+    path('api/competitions/',views.competition_list, name='competition_list'),
     path('api/competition/<int:competition_id>/', views.competition_detail, name='competition_detail'),
-    path('api/user/<int:user_id>/', views.user_detail, name="user_detail"),
+    path('api/user/', views.user_detail, name="user_detail"),
+    path('api/update_user/', views.update_user, name='update_user'),
     path('api/register_competition/', views.register_competition, name='register_competition'),
     path('api/create_competition/',views.create_competition,name='create_competition'),
     path('api/admin/pending_competitions/', views.pending_competitions, name='pending_competitions'),
@@ -38,6 +40,7 @@ urlpatterns = [
     path('api/competitions/<int:competition_id>/delete/',views.delete_competition),
     path('api/competitions/<int:competition_id>/update/',views.update_competition),
     path('api/competitions/<int:competition_id>/registrations/',views.competition_registrations),
+    path('api/my_registrations/',views.my_registrations),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]
