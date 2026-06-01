@@ -69,6 +69,7 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 const router = useRouter()
 
+// 角色列表，对应接口要求的中文role
 const roleList = [
   { label: '参赛选手', value: '选手' },
   { label: '赛事主办方', value: '主办方' },
@@ -105,10 +106,12 @@ const handleLogin = async () => {
     )
     if (res.data.success) {
       ElMessage.success('登录成功')
+      // 保存用户ID、Token、角色，用于后续鉴权和菜单权限
       localStorage.setItem('user_id', res.data.user_id)
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('role', selectedRole.value)
       
+      // 按角色自动跳转对应首页
       if (selectedRole.value === '选手') {
         router.push('/home')
       } else if (selectedRole.value === '主办方') {
