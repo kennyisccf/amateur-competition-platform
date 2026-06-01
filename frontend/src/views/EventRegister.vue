@@ -116,11 +116,11 @@ const handleSubmitRegister = async () => {
       {
         headers: {
           'X-CSRFToken': csrfToken,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
+        withCredentials: true
       }
     )
-
     if (res.data.success) {
       ElMessage.success('报名成功！')
       router.push('/home')

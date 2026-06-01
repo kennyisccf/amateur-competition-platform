@@ -41,8 +41,24 @@
             <div class="timeline-dot"></div>
             <div class="timeline-content">
               <div class="timeline-title">
-                {{ item.title }}
-                <span class="timeline-status" :class="item.status">{{ item.statusText }}</span>
+                <span>
+                  {{ item.title }}
+                </span>
+                <div class="action-area">              
+                  <span
+                    class="timeline-status"
+                    :class="item.status"
+                  >
+                    {{ item.statusText }}
+                  </span>                
+                  <el-button
+                    v-if="item.status !== 'finished'"
+                    size="small"
+                    type="danger"
+                    link
+                    @click="cancelRegistration(item.id)"
+                  > 取消报名</el-button>            
+                </div>   
               </div>
               <div class="timeline-time">{{ item.time }}</div>
               <div class="timeline-desc">{{ item.desc }}</div>
@@ -51,32 +67,6 @@
         </div>
       </div>
 
-      <!-- <div class="edit-card"> -->
-        <!-- <h3>基础资料管理</h3> -->
-        <!-- <form @submit.prevent="handleUpdateInfo" class="edit-form"> -->
-          <!-- <div class="form-row"> -->
-            <!-- <div class="form-item"> -->
-              <!-- <label>选手昵称</label> -->
-              <!-- <el-input v-model="form.nickname" /> -->
-            <!-- </div> -->
-            <!-- <div class="form-item"> -->
-              <!-- <label>绑定邮箱</label> -->
-              <!-- <el-input v-model="form.email" /> -->
-            <!-- </div> -->
-          <!-- </div> -->
-          <!-- <div class="form-row"> -->
-            <!-- <div class="form-item"> -->
-              <!-- <label>擅长项目</label> -->
-              <!-- <el-input v-model="form.skills" /> -->
-            <!-- </div> -->
-            <!-- <div class="form-item"> -->
-              <!-- <label>所属常驻战队</label> -->
-              <!-- <el-input v-model="form.team" /> -->
-            <!-- </div> -->
-          <!-- </div> -->
-          <!-- <el-button type="primary" native-type="submit">保存资料修改</el-button> -->
-        <!-- </form> -->
-      <!-- </div> -->
        <div class="edit-card">
           <h3>个人资料</h3>
           <el-form :model="form" label-width="90px">
@@ -108,7 +98,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage , ElMessageBox} from 'element-plus'
 import request from '@/utils/request'
 const router = useRouter()
 const loading = ref(false)
@@ -153,7 +143,7 @@ const loadUserInfo = async () => {
 }
 const handleUpdateInfo = async () => {
   try {
-    const res = await axios.put(
+    const res = await axios.post(
       'http://localhost:8000/api/update_user/',
       {
         nickname: form.value.nickname,
@@ -169,6 +159,34 @@ const handleUpdateInfo = async () => {
     }
   } catch (error) {
     ElMessage.error('修改失败')
+  }
+}
+const cancelRegistration = async (registrationId) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定取消该赛事报名吗？',
+      '提示',
+      {
+        type: 'warning'
+      }
+    )
+    const res = await axios.post(
+      'http://localhost:8000/api/cancel_registration/',
+      {
+        registration_id: registrationId
+      },
+      {
+        withCredentials: true
+      }
+    )
+    if(res.data.success){
+      ElMessage.success('已取消报名')
+      loadUserInfo()
+    }else{
+      ElMessage.error(res.data.msg)
+    }
+  } catch(err){
+    console.log(err)
   }
 }
 
@@ -338,5 +356,10 @@ onMounted(() => {
   text-align: center;
   padding: 50px;
   color: #666;
+}
+.action-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 </style>

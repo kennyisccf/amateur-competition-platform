@@ -10,11 +10,13 @@
         <div class="form-item">
           <label>赛事分类</label>
           <el-select v-model="form.category" placeholder="请选择分类">
-            <el-option label="篮球/足球" value="篮球/足球" />
-            <el-option label="羽毛球/网球" value="羽毛球/网球" />
-            <el-option label="MOBA电竞" value="MOBA电竞" />
-            <el-option label="射击/FPS" value="射击/FPS" />
+            <el-option label="篮球" value="篮球" />
+            <el-option label="足球" value="足球" />
+            <el-option label="羽毛球" value="羽毛球" />
+            <el-option label="网球" value="网球" />
+            <el-option label="电竞" value="电竞" />
             <el-option label="棋牌桌游" value="棋牌桌游" />
+            <el-option label="其他" value="其他" />
           </el-select>
         </div>
       </div>

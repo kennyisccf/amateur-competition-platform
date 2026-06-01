@@ -1,7 +1,7 @@
 <template>
   <el-container style="height: 100vh">
     <!-- 左侧导航栏 -->
-    <el-aside width="200px" style="background: #1677ff">
+    <el-aside width="200px" class="sidebar">
       <!-- 顶部品牌 -->
       <div class="logo-area">
         <h1>乐赛</h1>
@@ -30,7 +30,7 @@
       </div>
 
       <!-- 主办方专区：仅主办方/管理员可见 -->
-      <div class="menu-group" v-if="userRole === '主办方' || userRole === '管理员'">
+      <div class="menu-group" v-if="userRole === 'ORGANIZER' || userRole === 'ADMIN'">
         <div class="menu-title">主办方专区</div>
         <el-menu
           background-color="#1677ff"
@@ -54,7 +54,7 @@
       </div>
 
       <!-- 管理员专区：仅管理员可见 -->
-      <div class="menu-group" v-if="userRole === '管理员'">
+      <div class="menu-group" v-if="userRole === 'ADMIN'">
         <div class="menu-title">管理员专区</div>
         <el-menu
           background-color="#1677ff"
@@ -67,6 +67,9 @@
             <span>审核与风控</span>
           </el-menu-item>
         </el-menu>
+      </div>
+      <div class="logout-area">
+        <el-button type="danger" plain style="width: 160px" @click="handleLogout"> 退出登录 </el-button>
       </div>
     </el-aside>
 
@@ -81,14 +84,51 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Trophy, User, Plus, Tools, List, Setting } from '@element-plus/icons-vue'
-
+import { Trophy, User, Plus, Tools, List, Setting, SwitchButton} from '@element-plus/icons-vue'
 const userRole = ref('')
+import axios from 'axios'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 onMounted(() => {
   // 从本地获取用户角色，用于菜单权限
   userRole.value = localStorage.getItem('role') || ''
 })
+
+const handleLogout = () => {
+  ElMessageBox.confirm(
+    '确定退出当前账号吗？',
+    '退出登录',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  )
+  .then(async () => {
+    try {
+      const res = await axios.post(
+        'http://localhost:8000/api/logout/',
+        {},
+        {
+          withCredentials: true
+        }
+      )
+      if (res.data.success) {
+        localStorage.removeItem('user_id')
+        localStorage.removeItem('role')
+        localStorage.removeItem('token')
+        ElMessage.success('已退出登录')
+        router.replace('/login')
+      }
+    } catch (error) {
+      ElMessage.error('退出失败')
+      console.error(error)
+    }
+  })
+  .catch(() => {})
+}
 </script>
 
 <style scoped>
@@ -113,5 +153,19 @@ onMounted(() => {
   padding: 0 24px 8px;
   color: rgba(255,255,255,0.7);
   font-size: 12px;
+}
+.logout-area {
+  position: absolute;
+  bottom: 30px;
+  left: 20px;
+  right: 20px;
+  text-align: center;
+}
+.el-aside {
+  position: relative;
+}
+.sidebar {
+  background: #1677ff;
+  position: relative;
 }
 </style>

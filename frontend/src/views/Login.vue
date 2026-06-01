@@ -10,20 +10,7 @@
       </div>
     </div>
     <div class="login-form-card">
-      <h2>欢迎登录</h2>
-      <p>请选择您的系统角色并输入凭证</p>
-      
-      <!-- 角色选择 -->
-      <div class="role-tabs">
-        <button 
-          v-for="role in roleList" 
-          :key="role.value"
-          :class="{ active: selectedRole === role.value }"
-          @click="selectedRole = role.value"
-        >
-          {{ role.label }}
-        </button>
-      </div>
+      <h2>欢迎登录</h2> 
 
       <form @submit.prevent="handleLogin">
         <el-input
@@ -80,7 +67,6 @@ const selectedRole = ref('选手')
 const form = ref({
   username: '',
   password: '',
-  captcha: ''
 })
 
 const handleLogin = async () => {
@@ -96,7 +82,6 @@ const handleLogin = async () => {
       {
         username: form.value.username,
         password: form.value.password,
-        role: selectedRole.value
       },
       {
         headers: {
@@ -109,16 +94,16 @@ const handleLogin = async () => {
       // 保存用户ID、Token、角色，用于后续鉴权和菜单权限
       localStorage.setItem('user_id', res.data.user_id)
       localStorage.setItem('token', res.data.token)
-      localStorage.setItem('role', selectedRole.value)
+      localStorage.setItem('role', res.data.role)
       
-      // 按角色自动跳转对应首页
-      if (selectedRole.value === '选手') {
-        router.push('/home')
-      } else if (selectedRole.value === '主办方') {
-        router.push('/workbench')
-      } else if (selectedRole.value === '管理员') {
-        router.push('/admin-review')
-      }
+      router.push('/home')
+      // if (res.data.role === 'PLAYER') {
+        // router.push('/home')
+      // } else if (res.data.role === 'ORGANIZER') {
+        // router.push('/workbench')
+      // } else if (res.data.role === 'ADMIN') {
+        // router.push('/admin-review')
+      // }
     } else {
       ElMessage.error(res.data.msg || '登录失败')
     }
