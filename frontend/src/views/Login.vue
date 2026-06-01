@@ -69,7 +69,6 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 const router = useRouter()
 
-// 角色列表，对应接口要求的中文role
 const roleList = [
   { label: '参赛选手', value: '选手' },
   { label: '赛事主办方', value: '主办方' },
@@ -83,46 +82,6 @@ const form = ref({
   captcha: ''
 })
 
-// 登录处理
-// const handleLogin = async () => {
-  // if (!form.value.username || !form.value.password) {
-    // ElMessage.warning('请输入用户名和密码')
-    // return
-  // }
-// 
-  // try {
-    // const csrfRes = await axios.get('http://localhost:8000/csrf/')
-    // const csrfToken = csrfRes.data.csrfToken
-// 
-    // const res = await axios.post(
-      // 'http://localhost:8000/api/login/',
-      // {
-        // username: form.value.username,
-        // password: form.value.password,
-        // role: selectedRole.value,
-        // 
-      // },
-      // {
-        // headers: {
-          // 'X-CSRFToken': csrfToken,
-          // 'Content-Type': 'application/json'
-        // }
-      // }
-    // )
-// 
-    // if (res.data.success) {
-      // ElMessage.success('登录成功')
-      //保存用户ID，后续报名接口需要
-      // localStorage.setItem('user_id', res.data.user_id)
-      // router.push('/home')
-    // } else {
-      // ElMessage.error(res.data.msg || '登录失败')
-    // }
-  // } catch (err) {
-    // ElMessage.error('请求失败，请检查后端服务是否启动')
-    // console.error(err)
-  // }
-// }
 const handleLogin = async () => {
   if (!form.value.username || !form.value.password) {
     ElMessage.warning('请输入用户名和密码')
@@ -146,11 +105,17 @@ const handleLogin = async () => {
     )
     if (res.data.success) {
       ElMessage.success('登录成功')
-      localStorage.setItem(
-        'user_id',
-        res.data.user_id
-      )
-      router.push('/home')
+      localStorage.setItem('user_id', res.data.user_id)
+      localStorage.setItem('token', res.data.token)
+      localStorage.setItem('role', selectedRole.value)
+      
+      if (selectedRole.value === '选手') {
+        router.push('/home')
+      } else if (selectedRole.value === '主办方') {
+        router.push('/workbench')
+      } else if (selectedRole.value === '管理员') {
+        router.push('/admin-review')
+      }
     } else {
       ElMessage.error(res.data.msg || '登录失败')
     }
