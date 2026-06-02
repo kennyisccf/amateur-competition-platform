@@ -5,7 +5,7 @@
 
 * **基础路径:** `http://localhost:8000/api`
 
-* **请求头:** 所有需要鉴权的接口，均需要在 Header 中携带 `Authorization: Bearer <your_jwt_token>`
+* **请求头:** 当前使用 **Session/Cookie** 进行状态保持。前端在登录成功后，浏览器会自动保存 `sessionid` Cookie。后续调用需要鉴权的接口时，请确保请求携带 Cookie。
 
 * **全局返回格式:**
 
@@ -20,7 +20,6 @@
 
 
 ## **1. 基础模块**
-
 
 
 ### **1.1 获取 CSRF Token**
@@ -39,11 +38,7 @@ JSON
 }
 
 
-
-
-
 ## **2. 用户模块**
-
 
 
 ### **2.1 用户登录**
@@ -106,13 +101,11 @@ JSON
 }
 
 
+### **2.3 退出登录**
 
-## **3. 赛事模块**
+* **请求地址:** /api/logout/
+* **请求方式:** POST
 
-### **3.1 获取赛事详情**
-
-* **请求地址:** /api/competition/[int:competition\\\_id](int:competition\\\\_id)/ (例如: /api/competition/1/)
-* **请求方式:** GET
 * **返回结果:**
 
 JSON
@@ -121,49 +114,91 @@ JSON
 
 &#x20; "success": true,
 
-&#x20; "data": {
-
-&#x20;   "id": 1,
-
-&#x20;   "title": "赛事名称",
-
-&#x20;   "category": "类别",
-
-&#x20;   "location": "比赛地点",
-
-&#x20;   "description": "赛事描述",
-
-&#x20;   "type": "赛事类型",
-
-&#x20;   "organizer": {
-
-&#x20;     "id": 2,
-
-&#x20;     "username": "organizer1",
-
-&#x20;     "nickname": "主办方昵称"
-
-&#x20;   },
-
-&#x20;   "status": "状态",
-
-&#x20;   "max\_participants": 100,
-
-&#x20;   "current\_participants": 10,
-
-&#x20;   "reward\_points": 100,
-
-&#x20;   "start\_time": "2026-06-01T10:00:00",
-
-&#x20;   "end\_time": "2026-06-02T18:00:00",
-
-&#x20;   "created\_at": "2026-05-23T10:00:00"
-
-&#x20; }
+&#x20; "msg": "退出登录"
 
 }
 
-### **3.2 赛事报名**
+
+
+## **3. 赛事模块**
+
+### **3.1 获取公开赛事列表**
+
+* **请求地址:** /api/competitions/
+* **请求方式:** GET
+* **请求参数:**
+
+|**参数名**|**类型**|**必填**|**说明**|
+|-|-|-|-|
+|category|String|否|赛事分类筛选|
+|keyword|String|否|标题关键字搜索|
+
+* **返回结果:**
+
+JSON
+
+{
+  "success": true,
+  "competitions": [
+    {
+      "id": 1,
+      "title": "赛事名称",
+      "category": "类别",
+      "location": "比赛地点",
+      "description": "赛事描述",
+      "type": "PUBLIC",
+      "status": 1,
+      "max_participants": 100,
+      "current_participants": 10,
+      "reward_points": 100,
+      "start_time": "2026-06-01 10:00:00",
+      "end_time": "2026-06-02 18:00:00",
+      "created_at": "2026-05-23 10:00:00",
+      "organizer": {
+        "id": 2,
+        "username": "organizer1",
+        "nickname": "主办方昵称"
+      }
+    }
+  ]
+}
+
+
+### **3.2 获取赛事详情**
+
+* **请求地址:** /api/competition/<int:competition_id>/
+* **请求方式:** GET
+
+* **返回结果:**
+
+JSON
+
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "title": "赛事名称",
+    "category": "类别",
+    "location": "比赛地点",
+    "description": "赛事描述",
+    "type": "赛事类型",
+    "organizer": {
+      "id": 2,
+      "username": "organizer1",
+      "nickname": "主办方昵称"
+    },
+    "status": 1,
+    "max_participants": 100,
+    "current_participants": 10,
+    "reward_points": 100,
+    "start_time": "2026-06-01T10:00:00",
+    "end_time": "2026-06-02T18:00:00",
+    "created_at": "2026-05-23 10:00:00"
+  }
+}
+
+
+### **3.3 赛事报名**
 
 * **请求地址:** /api/register_competition/ 
 * **请求方式:** POST
@@ -188,17 +223,8 @@ JSON
 
 }
 
-1. `player_id` 为当前登录用户 ID，`competition_id` 为要报名的赛事 ID。
-2. 后端会验证：
-   - 用户存在且为选手角色
-   - 赛事存在
-   - 报名人数未超过上限
-   - 用户未重复报名
-3. 前端收到返回 JSON 后，根据 `success` 判断是否报名成功，并展示 `msg` 提示用户。
-4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
-5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
 
-### **3.3 创建赛事**
+### **3.4 创建赛事**
 
 - **请求地址:** /api/create_competition/ 
 - **请求方式:**POST
@@ -223,16 +249,17 @@ JSON
 JSON
 
 {
-
   "success": true,
-  "msg": "赛事创建成功"
-
+  "msg": "赛事创建成功",
+  "competition_id": 1,
+  "status": 1,
+  "invite_code": "AB12CD" 
 }
 
 ------
 
 
-### 3.4 我的赛事
+### 3.5 我的赛事(主办方端)
 
 - **请求地址:** `/api/my_competitions/`
 - **请求方式:** GET
@@ -257,41 +284,35 @@ JSON
 
 ```
 {
-    "success": true,
-    "competitions": [
-        {
-            "id":,
-            "title": "",
-            "category": "",
-            "location": "",
-            "description": "",
-            "type": "",
-            "status":,
-            "max_participants": ,
-            "current_participants": ,
-            "reward_points": ,
-            "start_time": "",
-            "end_time": "",
-            "invite_code": "",
-            "reject_reason":
-        }
-    ]
+  "success": true,
+  "competitions": [
+    {
+      "id": 1,
+      "title": "赛事名称",
+      "category": "类别",
+      "location": "比赛地点",
+      "description": "赛事描述",
+      "type": "PUBLIC",
+      "status": 1,
+      "max_participants": 100,
+      "current_participants": 10,
+      "reward_points": 100,
+      "start_time": "2026-06-01T10:00:00",
+      "end_time": "2026-06-02T18:00:00",
+      "created_at": "2026-05-23T10:00:00",
+      "invite_code": "",
+      "reject_reason": null
+    }
+  ]
 }
 ```
 
 ------
 
-### 3.5 删除赛事
+### 3.6 删除赛事
 
 - **请求地址:** `/api/competitions/<competition_id>/delete/`
 - **请求方式:** DELETE
-- **请求格式:** 无
-
-- **路径参数:**
-
-| 参数名         | 类型    | 必填 | 说明   |
-| -------------- | ------- | ---- | ------ |
-| competition_id | integer | 是   | 赛事ID |
 
 - **返回结果:**
 
@@ -304,7 +325,7 @@ JSON
 
 ------
 
-### 3.6 修改赛事
+### 3.7 修改赛事
 
 - **请求地址:** `/api/competitions/<competition_id>/update/`
 - **请求方式:** PUT
@@ -332,33 +353,27 @@ JSON
 
 ------
 
-### 3.7 查看赛事报名情况
+### 3.8 查看赛事报名情况
 
 - **请求地址:** `/api/competitions/<competition_id>/registrations/`
 - **请求方式:** GET
-- **请求格式:** 无
 
-- **路径参数**
-
-| 参数名         | 类型    | 必填 | 说明   |
-| -------------- | ------- | ---- | ------ |
-| competition_id | integer | 是   | 赛事ID |
 
 - **返回结果**
 
 ```
 {
-    "success": true,
-    "registrations": [
-        {
-            "registration_id": ,
-            "player_id": ,
-            "username": "",
-            "nickname": "",
-            "status": ,
-            "registration_time": ""
-        }
-    ]
+  "success": true,
+  "registrations": [
+    {
+      "registration_id": 1,
+      "player_id": 2,
+      "username": "player1",
+      "nickname": "选手昵称",
+      "status": 1,
+      "registration_time": "2026-05-24T10:00:00"
+    }
+  ]
 }
 ```
 
@@ -369,51 +384,73 @@ JSON
 
 ### **4.1 获取个人信息与积分**
 
-* **请求地址:** /api/profile/
+* **请求地址:** /api/user/
 * **请求方式:** GET
-* **请求格式:** 无
+* **权限说明:** 需要先登录，通过 Session 验证
 
 * **返回结果:**
 
 { 
-
   "success": true,
   "data": {
-    "user_id": ,
-    "username": "",
-    "nickname": "",
-    "role": "",
-    "total_points": 
+    "id": 1,
+    "username": "username",
+    "nickname": "nickname",
+    "email": "user@example.com",
+    "role": "PLAYER",
+    "points": 100,
+    "created_at": "2026-05-20 10:00:00",
+    "is_deleted": false
   }
-
 }
 
 
-### **4.2 获取我的报名记录**
+### **4.2 修改个人信息**
+
+* **请求地址:** /api/update_user/
+* **请求方式:** POST
+* **请求格式:** application/json
+* **权限说明:** 需要先登录，通过 Session 验证
+* **请求参数:**
+
+|**参数名**|**类型**|**必填**|**说明**|
+|-|-|-|-|
+|nickname|String|否|新昵称|
+|email|String|否|新邮箱|
+
+* **返回结果:**
+
+JSON
+
+{
+
+&#x20; "success": true,
+
+&#x20; "msg": "注册成功"
+
+}
+
+### **4.3 获取我的报名记录**
 
 * **请求地址:** /api/my_registrations/
 * **请求方式:** GET
-* **请求格式:** 无
+* **权限说明:** 需要先登录，接口自动从 Session 获取当前登录用户 ID，无需额外传参。
 
-- **路径参数**
-
-| 参数名    | 类型    | 必填 | 说明   |
-| ----------| ------- | ---- | ------ |
-| player_id | integer | 是   | 玩家ID |
 
 * **返回结果:**
 
 { 
-
   "success": true,
-  "data": {
-    "user_id": ,
-    "username": "",
-    "nickname": "",
-    "role": "",
-    "total_points": 
-  }
-
+  "data": [
+    {
+      "id": 1,
+      "title": "赛事名称",
+      "time": "2026-05-24 10:00",
+      "desc": "审核备注",
+      "status": "finished",
+      "statusText": "报名成功"
+    }
+  ]
 }
 
 
@@ -430,28 +467,27 @@ JSON
 
 ```
 {
-    "success": true,
-    "competitions": [
-        {
-            "id": ,
-            "title": "",
-            "category": "",
-            "location": "",
-            "description": "",
-            "max_participants":,
-            "current_participants":,
-            "reward_points":,
-            "start_time": "",
-            "end_time": "",
-            "organizer": {
-                "id": ,
-                "username": "",
-                "nickname": ""
-            }
-        }
-    ]
-}
-```
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "赛事名称",
+      "category": "类别",
+      "location": "比赛地点",
+      "description": "赛事描述",
+      "max_participants": 100,
+      "current_participants": 0,
+      "reward_points": 100,
+      "start_time": "2026-06-01T10:00:00",
+      "end_time": "2026-06-02T18:00:00",
+      "organizer": {
+        "id": 2,
+        "username": "organizer1",
+        "nickname": "主办方昵称"
+      }
+    }
+  ]
+}```
 
 
 ### 5.2 审核赛事
