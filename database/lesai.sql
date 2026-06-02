@@ -62,7 +62,8 @@ CREATE TABLE `registration` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `player_id` bigint NOT NULL,
   `competition_id` bigint NOT NULL,
-  `status` int DEFAULT 0 COMMENT '0审核中 1报名成功 2已驳回',
+  `status` varchar(20) DEFAULT '' COMMENT 'pending ongoing finished ',
+  `review_status` int DEFAULT 0, COMMENT '0未审核 1通过 2未通过'
   `final_score` varchar(50) NOT NULL DEFAULT '',
   `final_rank` int DEFAULT 0,
   `earned_points` int DEFAULT 0,

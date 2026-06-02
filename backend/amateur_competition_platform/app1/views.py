@@ -18,22 +18,20 @@ def login(request):
         data = json.loads(request.body)
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
-        role_map = {"选手": "PLAYER", "主办方": "ORGANIZER", "管理员": "ADMIN"}
-        role = role_map.get(data.get("role", "").strip(), "").upper()
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
-    if not username or not password or not role:
-        return JsonResponse({"success": False, "msg": "用户名、密码或角色不能为空"})
-    user = models.User.objects.filter(username=username, role=role).first()
+    if not username or not password:
+        return JsonResponse({"success": False, "msg": "用户名或密码不能为空"})
+    user = models.User.objects.filter(username=username).first()
     if not user:
-        return JsonResponse({"success": False, "msg": "用户不存在或角色不匹配"})
+        return JsonResponse({"success": False, "msg": "用户不存在"})
     password_md5 = hashlib.md5(password.encode()).hexdigest()
     if user.password != password_md5:
         return JsonResponse({"success": False, "msg": "密码错误"})
     request.session["user_id"] = user.id
     request.session["username"] = user.username
     request.session["role"] = user.role
-    return JsonResponse({"success": True, "msg": "登录成功", "user_id": user.id})
+    return JsonResponse({"success": True, "msg": "登录成功", "user_id": user.id, "role": user.role})
 
 @csrf_exempt
 def logout(request):
@@ -175,14 +173,18 @@ def update_user(request):
         data = json.loads(request.body)
         user_id = request.session.get("user_id")
         user = models.User.objects.filter(id=user_id).first()
+        if not user:
+            return JsonResponse({"success": False, "msg": "用户不存在"})
         user.nickname = data.get("nickname", user.nickname)
         user.email = data.get("email", user.email)
         user.save()
         return JsonResponse({"success": True, "msg": "修改成功"})
     except Exception as e:
-        return JsonResponse({"success": False, "msg": "修改失败"})
+        print(e)
+        return JsonResponse({"success": False, "msg": str(e)})
 
 @csrf_exempt
+@login_required
 def register_competition(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
@@ -201,19 +203,23 @@ def register_competition(request):
         return JsonResponse({"success": False, "msg": "赛事不存在"})
     if models.Registration.objects.filter(player=player, competition=competition).exists():
         return JsonResponse({"success": False, "msg": "你已报名该赛事"})
-    status = 1
-    invite_code = ''
     if competition.type == 'PRIVATE':
         if not invite_code:
             return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
         if invite_code != competition.invite_code:
             return JsonResponse({"success": False, "msg": "邀请码错误"})
+    competition.current_participants += 1
+    competition.save()
     models.Registration.objects.create(
         player=player,
         competition=competition,
-        status=status,
-        invite_code=invite_code
+        status=1,
+        invite_code=invite_code,
+        final_score='',
+        final_rank=0,
+        earned_points=0
     )
+
     return JsonResponse({"success": True, "msg": "报名成功"})
 
 
@@ -316,7 +322,7 @@ def review_competition(request): #管理员审核赛事 1:通过 4:驳回
     competition.save()
     return JsonResponse({"success": True,"msg": "审核完成"})
 
-
+@csrf_exempt
 def my_competitions(request):
     organizer_id = request.GET.get("organizer_id")
     status = request.GET.get("status", "")
@@ -399,6 +405,7 @@ def competition_registrations(request, competition_id):
             "username": r.player.username,
             "nickname": r.player.nickname,
             "status": r.status,
+            "review_status": r.review_status,
             "registration_time": r.registration_time
         })
     return JsonResponse({"success": True,"registrations": data})
@@ -431,3 +438,58 @@ def my_registrations(request):
                 status_map.get(reg.status)
         })
     return JsonResponse({"success": True,"data": result})
+
+@login_required
+@csrf_exempt
+def cancel_registration(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False,"msg": "仅支持POST"})
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+    except:
+        return JsonResponse({"success": False,"msg": "参数错误"})
+    user_id = request.session.get("user_id")
+    registration = models.Registration.objects.filter(id=registration_id,player_id=user_id).first()
+    if not registration:
+        return JsonResponse({"success": False,"msg": "报名记录不存在"})
+    registration.delete()
+    competition = models.Competition.objects.filter(id=registration.competition.id).first()
+    competition.current_participants -= 1
+    competition.save()
+    return JsonResponse({"success": True,"msg": "取消报名成功"})
+
+@csrf_exempt
+@login_required
+def approve_registration(request):
+    if request.method != "POST":
+        return JsonResponse({"success":False,"msg":"仅支持POST"})
+    data = json.loads(request.body)
+    registration_id = data.get("registration_id")
+    reg = models.Registration.objects.filter(id=registration_id).first()
+    if not reg:
+        return JsonResponse({"success":False,"msg":"报名不存在"})
+    reg.review_status = 1
+    reg.audit_remark = "审核通过"
+    reg.save()
+    competition = reg.competition
+    competition.current_participants += 1
+    competition.save()
+    return JsonResponse({"success":True,"msg":"审核通过"})
+
+@csrf_exempt
+@login_required
+def reject_registration(request):
+    if request.method != "POST":
+        return JsonResponse({"success":False,"msg":"仅支持POST"})
+    data = json.loads(request.body)
+    registration_id = data.get("registration_id")
+    remark = data.get("remark","")
+    reg = models.Registration.objects.filter(id=registration_id).first()
+    if not reg:
+        return JsonResponse({"success":False,"msg":"报名不存在"})
+    reg.review_status = 2
+    reg.audit_remark = remark
+    reg.save()
+    return JsonResponse({"success":True,"msg":"已驳回"})
+

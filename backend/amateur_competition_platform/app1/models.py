@@ -43,10 +43,11 @@ class Competition(models.Model):
 class Registration(models.Model):
     player = models.ForeignKey(User, on_delete=models.CASCADE, db_column='player_id')
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, db_column='competition_id')
-    status = models.IntegerField(default=0)  # 0审核中 1报名成功 2已驳回
-    final_score = models.CharField(max_length=50)
-    final_rank = models.IntegerField(default=0)
-    earned_points = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, default='pending')  # pending ongoing finished
+    review_status = models.IntegerField(default=0) #0未审核 1通过 2未通过
+    final_score = models.CharField(max_length=50, null=True, blank=True, default='')
+    final_rank = models.IntegerField(default=0, null=True, blank=True)
+    earned_points = models.IntegerField(default=0, null=True, blank=True)
     audit_remark = models.CharField(max_length=255, null=True, blank=True)
     registration_time = models.DateTimeField(auto_now_add=True)
     invite_code = models.CharField(max_length=50, null=True, blank=True)

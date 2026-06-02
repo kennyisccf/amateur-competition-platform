@@ -41,6 +41,9 @@ urlpatterns = [
     path('api/competitions/<int:competition_id>/update/',views.update_competition),
     path('api/competitions/<int:competition_id>/registrations/',views.competition_registrations),
     path('api/my_registrations/',views.my_registrations),
+    path("api/cancel_registration/",views.cancel_registration),
+    path('api/approve_registration/',views.approve_registration),
+    path('api/reject_registration/',views.reject_registration),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]
