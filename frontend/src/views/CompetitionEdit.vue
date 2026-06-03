@@ -44,7 +44,11 @@
         <label>赛事描述</label>
         <el-input v-model="form.description" type="textarea" :rows="5" placeholder="请输入赛事规则、说明等信息" />
       </div>
-
+      <div class="form-item">
+        <label>赛事奖励</label>
+        <el-input v-model="form.reward" type="textarea" :rows="5" placeholder="请输入赛事奖励" />
+      </div>
+      
       <el-button type="primary" native-type="submit" style="width: 100%; margin-top: 24px">
         保存修改
       </el-button>
@@ -86,6 +90,7 @@ const loadCompetition = async () => {
         location: res.data.data.location,
         max_participants: res.data.data.max_participants,
         reward_points: res.data.data.reward_points,
+        reward: res.data.data.reward,
         description: res.data.data.description
       }
       loading.value = false

@@ -78,7 +78,7 @@ def register(request):
     )
     return JsonResponse({"success": True, "msg": "注册成功"})
 
-
+@csrf_exempt
 def competition_list(request):
     c_category = request.GET.get("category", "")
     keyword = request.GET.get("keyword", "")
@@ -119,6 +119,7 @@ def competition_list(request):
         "competitions": data
     })
 
+@csrf_exempt
 def competition_detail(request, competition_id):
     competition = models.Competition.objects.filter(id=competition_id).first()
     data = {
@@ -137,6 +138,7 @@ def competition_detail(request, competition_id):
         "max_participants": competition.max_participants,
         "current_participants": competition.current_participants,
         "reward_points": getattr(competition, "reward_points", 100),
+        "reward": competition.reward,
         "start_time": competition.start_time,
         "end_time": competition.end_time,
         "created_at": competition.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -242,6 +244,7 @@ def create_competition(request):
         organizer_id = data.get("organizer_id")
         max_participants = data.get("max_participants", 100)
         reward_points = data.get("reward_points", 100)
+        reward = data.get("reward", "").strip()
         start_time = data.get("start_time")
         end_time = data.get("end_time")
     except Exception:
@@ -254,7 +257,7 @@ def create_competition(request):
     ).first()
     if not organizer:
         return JsonResponse({"success": False, "msg": "主办方不存在"})
-    status = 1
+    status = 0
     invite_code = ''
     if competition_type == 'PRIVATE':
         invite_code = generate_invite_code()
@@ -269,12 +272,14 @@ def create_competition(request):
         max_participants=max_participants,
         current_participants=0,
         reward_points=reward_points,
+        reward=reward,
         start_time=start_time,
         end_time=end_time,
         invite_code=invite_code
     )
     return JsonResponse({"success": True, "msg": "赛事创建成功", "competition_id": competition.id, "status": competition.status, "invite_code": invite_code})
 
+@csrf_exempt
 def pending_competitions(request): #管理员查看待审核的赛事
     competitions = models.Competition.objects.filter(type='PUBLIC',status=0).order_by('-created_at')
     data = []
@@ -285,6 +290,7 @@ def pending_competitions(request): #管理员查看待审核的赛事
             "category": c.category,
             "location": c.location,
             "description": c.description,
+            "reward": c.reward,
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
@@ -299,6 +305,7 @@ def pending_competitions(request): #管理员查看待审核的赛事
     return JsonResponse({"success": True,"data": data})
 
 @csrf_exempt
+@login_required
 def review_competition(request): #管理员审核赛事 1:通过 4:驳回
     if request.method != "POST":
         return JsonResponse({"success": False,"msg": "仅支持 POST"})
@@ -386,6 +393,7 @@ def update_competition(request, competition_id):
         competition.description = data.get("description",competition.description)
         competition.max_participants = data.get("max_participants",competition.max_participants)
         competition.reward_points = data.get("reward_points",competition.reward_points)
+        competition.reward = data.get("reward",competition.reward)
         competition.save()
     except Exception:
         return JsonResponse({"success": False,"msg": "请求格式错误"})
@@ -493,3 +501,51 @@ def reject_registration(request):
     reg.save()
     return JsonResponse({"success":True,"msg":"已驳回"})
 
+@csrf_exempt
+@login_required
+def admin_users(request):
+    users = models.User.objects.all()
+    data = []
+    role_map = {"PLAYER": "选手","ORGANIZER": "主办方","ADMIN": "管理员"}
+    for u in users:
+        data.append({
+            "user_id": u.id,
+            "username": u.username,
+            "role": role_map.get(u.role, u.role),
+
+        })
+
+    return JsonResponse({"success": True,"users": data})
+
+@csrf_exempt
+@login_required
+def toggle_user_status(request, user_id):
+    if request.method != "PUT":
+        return JsonResponse({"success": False, "msg": "仅支持PUT"})
+    data = json.loads(request.body)
+    user = models.User.objects.filter(id=user_id).first()
+    if not user:
+        return JsonResponse({"success": False,"msg": "用户不存在"})
+
+    user.is_deleted = data.get(
+        "is_active",
+        user.is_deleted
+    )
+    user.save()
+    return JsonResponse({"success": True,"msg": "该用户已封禁"})
+
+@csrf_exempt
+@login_required
+def audit_records(request):
+    records = models.AuditRecord.objects.all().order_by("-created_at")
+    data = []
+    for r in records:
+        data.append({
+            "record_id": r.id,
+            "competition_id": r.competition.id,
+            "action": r.action,
+            "created_at": r.created_at.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        })
+    return JsonResponse({"success": True,"records": data})
