@@ -61,7 +61,10 @@
         <label>赛事描述</label>
         <el-input v-model="form.description" type="textarea" :rows="5" placeholder="请输入赛事规则、说明等信息" />
       </div>
-
+      <div class="form-item">
+        <label>赛事奖励</label>
+        <el-input v-model="form.reward" type="textarea" :rows="5" placeholder="请输入赛事奖励" />
+      </div>
       <el-button type="primary" native-type="submit" style="width: 100%; margin-top: 24px">
         创建赛事
       </el-button>
@@ -85,7 +88,8 @@ const form = ref({
   reward_points: '',
   start_time: '',
   end_time: '',
-  description: ''
+  description: '',
+  status: '0'
 })
 
 // 获取请求头
@@ -100,7 +104,7 @@ const getHeaders = async () => {
 }
 
 const handleCreate = async () => {
-  if (!form.value.title || !form.value.location) {
+  if (!form.value.title || !form.value.category || !form.value.location || !form.value.competition_type || !form.value.start_time || !form.value.end_time || !form.value.max_participants || !form.value.reward_points) {
     ElMessage.warning('请填写必填项')
     return
   }

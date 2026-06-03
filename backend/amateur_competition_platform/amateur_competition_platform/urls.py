@@ -44,6 +44,9 @@ urlpatterns = [
     path("api/cancel_registration/",views.cancel_registration),
     path('api/approve_registration/',views.approve_registration),
     path('api/reject_registration/',views.reject_registration),
+    path('api/admin/users/', views.admin_users),
+    path('api/admin/users/<int:user_id>/status/', views.toggle_user_status),
+    path('api/admin/audit_records/', views.audit_records),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]

@@ -23,13 +23,14 @@ class Competition(models.Model):
     title = models.CharField(max_length=100)
     category = models.CharField(max_length=50)
     location = models.CharField(max_length=100)
-    description = models.TextField(null=True, blank=True)
+    description = models.TextField(default='', null=True, blank=True, max_length=100)
     type = models.CharField(max_length=10)  # PUBLIC PRIVATE
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='organizer_id')
     status = models.IntegerField(default=0)  # 0待审核 1报名中 2进行中 3已结束 4驳回
     max_participants = models.IntegerField(default=100)
     current_participants = models.IntegerField(default=0)
     reward_points = models.IntegerField(default=100)
+    reward = models.TextField(default='', null=True, blank=True, max_length=100)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -65,3 +66,11 @@ class Point_history(models.Model):
         db_table = 'point_history'
         unique_together = (('username', 'time'),)
         managed = False
+
+
+class AuditRecord(models.Model):
+    competition = models.ForeignKey(Competition,on_delete=models.CASCADE)
+    action = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        db_table = "audit_record"

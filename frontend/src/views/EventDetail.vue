@@ -35,19 +35,8 @@
 
         <div class="section">
           <h3>赛事奖励</h3>
-          <div class="reward-content">
-            <div class="reward-item">
-              <el-icon><Medal /></el-icon>
-              <span>冠军队伍: 奖金 {{ Math.round(competitionData.reward_points * 3) }} 元 + 乐赛平台专属徽章</span>
-            </div>
-            <div class="reward-item">
-              <el-icon><Medal /></el-icon>
-              <span>亚军队伍: 奖金 {{ Math.round(competitionData.reward_points * 1.5) }} 元 + {{ competitionData.reward_points }} 积分奖励</span>
-            </div>
-            <div class="reward-item">
-              <el-icon><Medal /></el-icon>
-              <span>季军队伍: 奖金 {{ Math.round(competitionData.reward_points * 0.8) }} 元</span>
-            </div>
+          <div class="rule-content">
+            <p>{{ competitionData.reward }}</p>
           </div>
         </div>
       </div>
