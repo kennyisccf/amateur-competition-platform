@@ -25,6 +25,8 @@ def login(request):
     user = models.User.objects.filter(username=username).first()
     if not user:
         return JsonResponse({"success": False, "msg": "用户不存在"})
+    if user.is_deleted:
+        return JsonResponse({"success": False, "msg": "该账号已被封禁"}, status=403)
     password_md5 = hashlib.md5(password.encode()).hexdigest()
     if user.password != password_md5:
         return JsonResponse({"success": False, "msg": "密码错误"})
@@ -304,28 +306,54 @@ def pending_competitions(request): #管理员查看待审核的赛事
 
 @csrf_exempt
 @login_required
-def review_competition(request): #管理员审核赛事 1:通过 4:驳回
+def review_competition(request):
     if request.method != "POST":
-        return JsonResponse({"success": False,"msg": "仅支持 POST"})
+        return JsonResponse({"success": False, "msg": "仅支持 POST"})
+
+    admin = models.User.objects.filter(
+        id=request.session.get("user_id"),
+        role="ADMIN"
+    ).first()
+
+    if not admin:
+        return JsonResponse({"success": False, "msg": "无管理员权限"}, status=403)
+
     try:
         data = json.loads(request.body)
         competition_id = data.get("competition_id")
         status = data.get("status")
+        reason = (data.get("reason") or "").strip()
     except Exception:
-        return JsonResponse({"success": False,"msg": "请求格式错误"})
+        return JsonResponse({"success": False, "msg": "请求格式错误"})
+
     competition = models.Competition.objects.filter(id=competition_id).first()
+
     if not competition:
-        return JsonResponse({"success": False,"msg": "赛事不存在"})
+        return JsonResponse({"success": False, "msg": "赛事不存在"})
+
     if competition.status != 0:
-        return JsonResponse({"success": False,"msg": "该赛事已审核"})
+        return JsonResponse({"success": False, "msg": "该赛事已审核"})
+
     if status == 1:
         competition.status = 1
+        result = 1
     elif status == 4:
         competition.status = 4
+        competition.reject_reason = reason
+        result = 2
     else:
-        return JsonResponse({"success": False,"msg": "非法审核状态"})
+        return JsonResponse({"success": False, "msg": "非法审核状态"})
+
     competition.save()
-    return JsonResponse({"success": True,"msg": "审核完成"})
+
+    models.AuditRecord.objects.create(
+        competition=competition,
+        auditor=admin,
+        result=result,
+        remark=reason
+    )
+
+    return JsonResponse({"success": True, "msg": "审核完成"})
 
 @csrf_exempt
 def my_competitions(request):
@@ -438,10 +466,10 @@ def my_registrations(request):
             ),
             "desc": reg.audit_remark or "",
             "status":
-                "finished" if reg.status == 1
+                "finished" if reg.review_status == 1
                 else "processing",
             "statusText":
-                status_map.get(reg.status)
+                status_map.get(reg.review_status, "未知状态")
         })
     return JsonResponse({"success": True,"data": result})
 
@@ -459,10 +487,13 @@ def cancel_registration(request):
     registration = models.Registration.objects.filter(id=registration_id,player_id=user_id).first()
     if not registration:
         return JsonResponse({"success": False,"msg": "报名记录不存在"})
+    competition = registration.competition
+    was_approved = registration.review_status == 1
     registration.delete()
-    competition = models.Competition.objects.filter(id=registration.competition.id).first()
-    competition.current_participants -= 1
-    competition.save()
+
+    if was_approved and competition.current_participants > 0:
+        competition.current_participants -= 1
+        competition.save()
     return JsonResponse({"success": True,"msg": "取消报名成功"})
 
 @csrf_exempt
@@ -520,17 +551,19 @@ def admin_users(request):
 def toggle_user_status(request, user_id):
     if request.method != "PUT":
         return JsonResponse({"success": False, "msg": "仅支持PUT"})
+
     data = json.loads(request.body)
     user = models.User.objects.filter(id=user_id).first()
-    if not user:
-        return JsonResponse({"success": False,"msg": "用户不存在"})
 
-    user.is_deleted = data.get(
-        "is_active",
-        user.is_deleted
-    )
+    if not user:
+        return JsonResponse({"success": False, "msg": "用户不存在"})
+
+    is_active = data.get("is_active")
+    user.is_deleted = not is_active
     user.save()
-    return JsonResponse({"success": True,"msg": "该用户已封禁"})
+
+    msg = "用户已解封" if is_active else "用户已封禁"
+    return JsonResponse({"success": True, "msg": msg})
 
 @csrf_exempt
 @login_required
