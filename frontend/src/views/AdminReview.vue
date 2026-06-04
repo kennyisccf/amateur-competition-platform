@@ -85,8 +85,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage, ElInput } from 'element-plus'
-
+import { ElMessage, ElMessageBox } from 'element-plus'
+axios.defaults.withCredentials = true
 const loading = ref(false)
 const activeTab = ref('review')
 const stats = ref({
@@ -120,8 +120,8 @@ const loadPending = async () => {
     const headers = await getHeaders()
     const res = await axios.get('http://localhost:8000/api/admin/pending_competitions/', { headers })
     if (res.data.success) {
-      pendingList.value = res.data.competitions
-      stats.value.pendingCount = res.data.competitions.length
+      pendingList.value = res.data.data
+      stats.value.pendingCount = res.data.data.length
     }
   } catch (err) {
     ElMessage.error('加载失败')
@@ -171,7 +171,7 @@ const handleApprove = async (row) => {
   } catch (err) { ElMessage.error('操作失败') }
 }
 const handleReject = async (row) => {
-  const reason = await ElInput.prompt('请输入驳回原因')
+  const { value: reason } = await ElMessageBox.prompt('请输入驳回原因', '驳回赛事')
   if (!reason) return
   try {
     const headers = await getHeaders()
