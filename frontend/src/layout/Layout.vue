@@ -30,7 +30,7 @@
       </div>
 
       <!-- 主办方专区：仅主办方/管理员可见 -->
-      <div class="menu-group" v-if="userRole === 'ORGANIZER' || userRole === 'ADMIN'">
+      <div class="menu-group" v-if="userRole === 'ORGANIZER'">
         <div class="menu-title">主办方专区</div>
         <el-menu
           background-color="#1677ff"
