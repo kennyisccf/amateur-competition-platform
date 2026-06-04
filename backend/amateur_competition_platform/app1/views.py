@@ -194,7 +194,7 @@ def register_competition(request):
         data = json.loads(request.body)
         player_id = data.get("player_id")
         competition_id = data.get("competition_id")
-        invite_code = data.get("invite_code", '').strip()
+        invite_code = (data.get("invite_code") or '').strip()
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
     player = models.User.objects.filter(id=player_id, role='PLAYER').first()
@@ -210,8 +210,6 @@ def register_competition(request):
             return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
         if invite_code != competition.invite_code:
             return JsonResponse({"success": False, "msg": "邀请码错误"})
-    competition.current_participants += 1
-    competition.save()
     models.Registration.objects.create(
         player=player,
         competition=competition,
@@ -240,7 +238,7 @@ def create_competition(request):
         category = data.get("category", "").strip()
         location = data.get("location", "").strip()
         description = data.get("description", "").strip()
-        competition_type = data.get("type", "").strip()
+        competition_type = data.get("competition_type", "").strip()
         organizer_id = data.get("organizer_id")
         max_participants = data.get("max_participants", 100)
         reward_points = data.get("reward_points", 100)
@@ -512,7 +510,7 @@ def admin_users(request):
             "user_id": u.id,
             "username": u.username,
             "role": role_map.get(u.role, u.role),
-
+            "is_active": not u.is_deleted,
         })
 
     return JsonResponse({"success": True,"users": data})
@@ -537,15 +535,15 @@ def toggle_user_status(request, user_id):
 @csrf_exempt
 @login_required
 def audit_records(request):
-    records = models.AuditRecord.objects.all().order_by("-created_at")
+    records = models.AuditRecord.objects.all().order_by("-audit_time")
     data = []
+
     for r in records:
         data.append({
             "record_id": r.id,
-            "competition_id": r.competition.id,
-            "action": r.action,
-            "created_at": r.created_at.strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            "competition_id": r.competition_id,
+            "action": "通过" if r.result == 1 else "驳回",
+            "created_at": r.audit_time.strftime("%Y-%m-%d %H:%M:%S"),
         })
-    return JsonResponse({"success": True,"records": data})
+
+    return JsonResponse({"success": True, "records": data})

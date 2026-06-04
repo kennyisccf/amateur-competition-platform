@@ -69,8 +69,20 @@ class Point_history(models.Model):
 
 
 class AuditRecord(models.Model):
-    competition = models.ForeignKey(Competition,on_delete=models.CASCADE)
-    action = models.CharField(max_length=20)
-    created_at = models.DateTimeField(auto_now_add=True)
+    competition = models.ForeignKey(
+        Competition,
+        on_delete=models.CASCADE,
+        db_column="competition_id"
+    )
+    auditor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="auditor_id"
+    )
+    result = models.IntegerField()
+    remark = models.CharField(max_length=255, null=True, blank=True)
+    audit_time = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         db_table = "audit_record"
+        managed = False
