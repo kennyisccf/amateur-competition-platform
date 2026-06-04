@@ -257,7 +257,7 @@ def create_competition(request):
     ).first()
     if not organizer:
         return JsonResponse({"success": False, "msg": "主办方不存在"})
-    status = 0
+    status = 0 if competition_type == "PUBLIC" else 1
     invite_code = ''
     if competition_type == 'PRIVATE':
         invite_code = generate_invite_code()
@@ -506,10 +506,15 @@ def approve_registration(request):
     reg = models.Registration.objects.filter(id=registration_id).first()
     if not reg:
         return JsonResponse({"success":False,"msg":"报名不存在"})
+    if reg.review_status != 0:
+        return JsonResponse({"success": False, "msg": "该报名已审核"})
+
+    competition = reg.competition
+    if competition.current_participants >= competition.max_participants:
+        return JsonResponse({"success": False, "msg": "赛事人数已满"})
     reg.review_status = 1
     reg.audit_remark = "审核通过"
     reg.save()
-    competition = reg.competition
     competition.current_participants += 1
     competition.save()
     return JsonResponse({"success":True,"msg":"审核通过"})
