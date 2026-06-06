@@ -14,7 +14,6 @@
           placeholder="搜赛事、找运动项目..."
           @keyup.enter="searchEvent"
         />
-
         <el-button
           type="primary"
           @click="searchEvent"
@@ -164,7 +163,31 @@ const getCompetitionData = async () => {
 const searchEvent = () => {
   getCompetitionData()
 }
-
+// 
+// const searchEvent = async () => {
+  // if (inviteCode.value.trim()) {
+    // try {
+      // const res = await axios.get(
+        // `http://localhost:8000/api/competition_by_invite/`,
+        // { params: { invite_code: inviteCode.value.trim() } }
+      // )
+      // if (res.data.success && res.data.competition) {
+        // router.push(`/event-detail/${res.data.competition.id}`)
+        // return
+      // } else {
+        // ElMessage.error(res.data.msg || '未找到该私人赛事')
+        // return
+      // }
+    // } catch (err) {
+      // console.error(err)
+      // ElMessage.error('查询私人赛事失败')
+      // return
+    // }
+  // }
+// 
+  // 否则按关键字搜索公开赛事
+  // getCompetitionData()
+// }
 watch(category, () => {
   getCompetitionData()
 })

@@ -26,6 +26,21 @@
             <el-icon><User /></el-icon>
             <span>我的运动档案</span>
           </el-menu-item>
+
+          <el-menu-item index="/notifications" @click="openNotifications">
+            <div class="notify-wrapper">
+              <el-badge
+                :value="unreadCount"
+                :hidden="unreadCount === 0"
+                class="notify-badge"
+              >
+                <el-icon><Bell /></el-icon>
+              </el-badge>
+              <span style="margin-left: 8px;">消息通知</span>
+            </div>
+          </el-menu-item>
+
+
         </el-menu>
       </div>
 
@@ -84,13 +99,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Trophy, User, Plus, Tools, List, Setting, SwitchButton} from '@element-plus/icons-vue'
+import { Trophy, User, Plus, Tools, List, Setting, SwitchButton, Bell} from '@element-plus/icons-vue'
 const userRole = ref('')
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const unreadCount = ref(0)
 onMounted(() => {
   // 从本地获取用户角色，用于菜单权限
   userRole.value = localStorage.getItem('role') || ''
@@ -129,6 +145,29 @@ const handleLogout = () => {
   })
   .catch(() => {})
 }
+
+const getUnreadCount = async () => {
+  try {
+    const res = await axios.get('http://localhost:8000/api/unread_notification_count/', { withCredentials: true })
+    if (res.data.success) unreadCount.value = res.data.count
+  } catch (err) { console.error(err) }
+}
+
+
+const openNotifications = async () => {
+  try {
+    await axios.post('http://localhost:8000/api/read_all_notifications/', {}, { withCredentials:true })
+    unreadCount.value = 0
+    router.push('/notifications')
+  } catch(err){
+    console.error(err)
+    router.push('/notifications')
+  }
+}
+onMounted(() => {
+  getUnreadCount()
+  setInterval(getUnreadCount, 60000)
+})
 </script>
 
 <style scoped>
@@ -167,5 +206,20 @@ const handleLogout = () => {
 .sidebar {
   background: #1677ff;
   position: relative;
+}
+.notify-wrapper {
+  display: flex;
+  align-items: center;
+}
+:deep(.notify-badge .el-badge__content) {
+  top: 4px !important;
+  left: -4px !important;
+  right: auto !important;
+  transform: scale(0.8);
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
 }
 </style>

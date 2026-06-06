@@ -47,6 +47,13 @@ urlpatterns = [
     path('api/admin/users/', views.admin_users),
     path('api/admin/users/<int:user_id>/status/', views.toggle_user_status),
     path('api/admin/audit_records/', views.audit_records),
+    path('api/competition_by_invite/', views.competition_by_invite),
+
+    path('api/notifications/', views.my_notifications),
+    path('api/read_notification/', views.read_notification),
+    path( 'api/unread_notification_count/', views.unread_notification_count),
+    path('api/read_all_notifications/', views.read_all_notifications),
+    path('api/delete_notification/', views.delete_notification),
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]

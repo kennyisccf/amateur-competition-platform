@@ -25,7 +25,12 @@
           <el-icon><UserFilled /></el-icon>
           <span>报名人数: {{ competitionData.current_participants }} / {{ competitionData.max_participants }}</span>
         </div>
-
+        
+        <!-- <div class="info-row">
+          <el-icon><UserFilled /></el-icon>
+          <span>邀请码: {{ competitionData.invite_code }}</span>
+        </div> -->
+        
         <div class="section">
           <h3>赛事规则</h3>
           <div class="rule-content">

@@ -86,3 +86,18 @@ class AuditRecord(models.Model):
     class Meta:
         db_table = "audit_record"
         managed = False
+
+class Notification(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='user_id'
+    )
+    title = models.CharField(max_length=100)
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # type = models.IntegerField(default=0)
+    class Meta:
+        db_table = "notification"
+        managed = False

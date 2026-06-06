@@ -29,9 +29,13 @@
           <h3>主办方资质准入终审</h3>
           <el-table :data="pendingList" border v-loading="loading">
             <el-table-column prop="id" label="赛事ID" width="80" />
-            <el-table-column prop="title" label="赛事名称" min-width="180" />
-            <el-table-column prop="category" label="分类" width="120" />
+            <el-table-column prop="title" label="赛事名称" min-width="80" />
+            <el-table-column prop="category" label="分类" width="80" />
             <el-table-column prop="organizer.nickname" label="主办方" width="120" />
+            <el-table-column prop="location" label="地点" width="120" />
+            <el-table-column prop="reward_points" label="奖励分数" width="120" />
+            <el-table-column prop="start_time" label="开始时间" width="180" />
+            <el-table-column prop="end_time" label="结束时间" width="180" />
             <el-table-column label="操作" width="200">
               <template #default="scope">
                 <el-button size="small" type="success" @click="handleApprove(scope.row)">批准</el-button>

@@ -11,7 +11,7 @@ import Workbench from '../views/Workbench.vue'
 import AdminReview from '../views/AdminReview.vue'
 import RegistrationManage from '../views/RegistrationManage.vue'
 import CompetitionEdit from '../views/CompetitionEdit.vue' 
-
+import Notifications from '../views/Notifications.vue'
 const routes = [
   {
     path: '/login',
@@ -34,7 +34,8 @@ const routes = [
       { path: 'workbench', name: 'Workbench', component: Workbench },
       { path: 'registration-manage', name: 'RegistrationManage', component: RegistrationManage },
       { path: 'competition-edit/:id', name: 'CompetitionEdit', component: CompetitionEdit }, 
-      { path: 'admin-review', name: 'AdminReview', component: AdminReview }
+      { path: 'admin-review', name: 'AdminReview', component: AdminReview },
+      { path: 'notifications', name: 'Notifications', component: Notifications }
     ]
   }
 ]

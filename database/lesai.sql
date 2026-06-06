@@ -109,13 +109,17 @@ CREATE TABLE `audit_record` (
 -- ----------------------------
 -- 6. 通知数据表 (辅助主办方业务)
 -- ----------------------------
-DROP TABLE IF EXISTS `notice`;
-CREATE TABLE `notice` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `competition_id` bigint NOT NULL,
-  `title` varchar(100) NOT NULL,
-  `content` text NOT NULL,
-  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+DROP TABLE IF EXISTS `notification`;
+CREATE TABLE `notification` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT NOT NULL,
+  `title` VARCHAR(100) NOT NULL,
+  `content` TEXT NOT NULL,
+  `is_read` TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `type` INT NOT NULL
+  `prefix` VARCHAR(50),
+  `suffix` VARCHAR(50),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -154,7 +158,4 @@ INSERT INTO `audit_record` (`competition_id`, `auditor_id`, `result`, `remark`) 
 (4, 1, 2, '私人赛事描述过于简单，不符合社区规范');
 
 -- 通知数据 (对应羽毛球赛)
-INSERT INTO `notice` (`competition_id`, `title`, `content`) VALUES 
-(1, '入场须知', '请各位选手自备球拍，准时在体育馆门口集合。');
-
 SET FOREIGN_KEY_CHECKS = 1;

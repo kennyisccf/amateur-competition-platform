@@ -110,6 +110,7 @@ def competition_list(request):
             "start_time": c.start_time.strftime("%Y-%m-%d %H:%M:%S"),
             "end_time": c.end_time.strftime("%Y-%m-%d %H:%M:%S"),
             "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "invite_code": c.invite_code,
             "organizer": {
                 "id": c.organizer.id,
                 "username": c.organizer.username,
@@ -141,6 +142,7 @@ def competition_detail(request, competition_id):
         "current_participants": competition.current_participants,
         "reward_points": getattr(competition, "reward_points", 100),
         "reward": competition.reward,
+        "invite_code": competition.invite_code,
         "start_time": competition.start_time,
         "end_time": competition.end_time,
         "created_at": competition.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -212,6 +214,16 @@ def register_competition(request):
             return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
         if invite_code != competition.invite_code:
             return JsonResponse({"success": False, "msg": "邀请码错误"})
+        models.Notification.objects.create(
+            user=player,
+            title=competition.title,
+            content=f"您已成功报名赛事 {competition.title} "
+        )
+    models.Notification.objects.create(
+        user=competition.organizer,
+        title=competition.title,
+        content=f"{competition.title} 有新的参赛者"
+    )
     models.Registration.objects.create(
         player=player,
         competition=competition,
@@ -261,6 +273,13 @@ def create_competition(request):
     invite_code = ''
     if competition_type == 'PRIVATE':
         invite_code = generate_invite_code()
+
+    else:
+        models.Notification.objects.create(
+            user=models.User.objects.filter(role="ADMIN").first(),
+            title=title,
+            content=f"未审核的赛事：{title}"
+        )
     competition = models.Competition.objects.create(
         title=title,
         category=category,
@@ -281,7 +300,7 @@ def create_competition(request):
 
 @csrf_exempt
 def pending_competitions(request): #管理员查看待审核的赛事
-    competitions = models.Competition.objects.filter(type='PUBLIC',status=0).order_by('-created_at')
+    competitions = models.Competition.objects.filter(status=0, type = "PUBLIC").order_by('-created_at')
     data = []
     for c in competitions:
         data.append({
@@ -294,8 +313,8 @@ def pending_competitions(request): #管理员查看待审核的赛事
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
-            "start_time": c.start_time,
-            "end_time": c.end_time,
+            "start_time": c.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": c.end_time.strftime("%Y-%m-%d %H:%M:%S"),
             "organizer": {
                 "id": c.organizer.id,
                 "username": c.organizer.username,
@@ -309,9 +328,8 @@ def pending_competitions(request): #管理员查看待审核的赛事
 def review_competition(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"})
-
     admin = models.User.objects.filter(
-        id=request.session.get("user_id"),
+        id = request.session.get('user_id'),
         role="ADMIN"
     ).first()
 
@@ -337,10 +355,20 @@ def review_competition(request):
     if status == 1:
         competition.status = 1
         result = 1
+        models.Notification.objects.create(
+            user = competition.organizer,
+            title = competition.title,
+            content = f"您创建的赛事 {competition.title} 已通过审核。"
+        )
     elif status == 4:
         competition.status = 4
         competition.reject_reason = reason
         result = 2
+        models.Notification.objects.create(
+            user=competition.organizer,
+            title=competition.title,
+            content=f"您创建的赛事 {competition.title} 审核未通过。\n原因：{reason}"
+        )
     else:
         return JsonResponse({"success": False, "msg": "非法审核状态"})
 
@@ -517,6 +545,11 @@ def approve_registration(request):
     reg.save()
     competition.current_participants += 1
     competition.save()
+    models.Notification.objects.create(
+        user=reg.player,
+        title=reg.competition.title,
+        content=f"您已成功报名赛事 {competition.title} "
+    )
     return JsonResponse({"success":True,"msg":"审核通过"})
 
 @csrf_exempt
@@ -533,6 +566,11 @@ def reject_registration(request):
     reg.review_status = 2
     reg.audit_remark = remark
     reg.save()
+    models.Notification.objects.create(
+        user=reg.player,
+        title=reg.competition.title,
+        content=f"您报名的赛事 {reg.competition.title} 未通过审核"
+    )
     return JsonResponse({"success":True,"msg":"已驳回"})
 
 @csrf_exempt
@@ -585,3 +623,90 @@ def audit_records(request):
         })
 
     return JsonResponse({"success": True, "records": data})
+
+@csrf_exempt
+def competition_by_invite(request):
+    invite_code = request.GET.get('invite_code', '').strip()
+    if not invite_code:
+        return JsonResponse({"success": False, "msg": "邀请码不能为空"})
+    competition = models.Competition.objects.filter(
+        type='PRIVATE',
+        invite_code=invite_code
+    ).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "未找到匹配的私人赛事"})
+    data = {
+        "id": competition.id,
+        "title": competition.title,
+        "category": competition.category,
+        "location": competition.location,
+        "type": competition.type,
+        "current_participants": competition.current_participants,
+        "max_participants": competition.max_participants,
+        "reward_points": competition.reward_points
+    }
+    return JsonResponse({"success": True, "competition": data})
+
+@csrf_exempt
+@login_required
+def my_notifications(request):
+    user_id = request.session.get("user_id")
+    notifications = models.Notification.objects.filter(user_id=user_id).order_by("-created_at")
+    data = []
+    for item in notifications:
+        data.append({
+            "id": item.id,
+            "title": item.title,
+            "content": item.content,
+            "is_read": item.is_read,
+            "created_at": item.created_at.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        })
+    return JsonResponse({"success": True, "notifications": data})
+
+
+@login_required
+@csrf_exempt
+def read_notification(request):
+    data = json.loads(request.body)
+    notification_id = data.get("notification_id")
+    notification = models.Notification.objects.filter(id=notification_id).first()
+    if not notification:
+        return JsonResponse({"success": False, "msg": "通知不存在"})
+    notification.is_read = True
+    notification.save()
+    return JsonResponse({"success": True})
+
+@csrf_exempt
+@login_required
+def unread_notification_count(request):
+    user_id = request.session.get("user_id")
+    count = models.Notification.objects.filter(user_id=user_id, is_read=False).count()
+    return JsonResponse({"success": True, "count": count})
+
+@login_required
+@csrf_exempt
+def read_all_notifications(request):
+    user_id = request.session.get("user_id")
+    notifications = models.Notification.objects.filter(user_id=user_id, is_read=False)
+    notifications.update(is_read=True)
+    return JsonResponse({"success": True})
+
+@csrf_exempt
+@login_required
+def delete_notification(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"})
+    try:
+        data = json.loads(request.body)
+        notification_id = data.get("notification_id")
+    except:
+        return JsonResponse({"success": False, "msg": "参数错误"})
+
+    user_id = request.session.get("user_id")
+    notification = models.Notification.objects.filter(id=notification_id, user_id=user_id).first()
+    if not notification:
+        return JsonResponse({"success": False, "msg": "通知不存在"})
+    notification.delete()
+    return JsonResponse({"success": True, "msg": "删除成功"})

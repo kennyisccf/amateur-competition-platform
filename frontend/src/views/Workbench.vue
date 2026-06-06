@@ -21,7 +21,7 @@
       <el-table-column prop="title" label="赛事名称" min-width="220"/>
       <el-table-column prop="category" label="分类" width="100"/>
       <el-table-column prop="location" label="地点" width="160"/>
-      <el-table-column label="状态" width="120">
+      <el-table-column label="状态" width="90">
         <template #default="scope">
           <el-tag :type="statusMap[scope.row.status]?.type">{{ statusMap[scope.row.status]?.text }}</el-tag>
         </template>
@@ -33,14 +33,14 @@
         <template #default="scope">
           {{new Date(scope.row.start_time) .toLocaleDateString()}}
         </template>
-      </el-table-column><el-table-column label="驳回原因" min-width="200">
+      </el-table-column><el-table-column label="驳回原因" min-width="190">
         <template #default="scope">
           <span v-if="scope.row.status === 4" style="color:#f56c6c">{{ scope.row.reject_reason }}</span>
           <span v-else>-</span>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" min-width="320" fixed="right">
+      <el-table-column label="操作" min-width="300" fixed="right">
         <template #default="scope">
           <el-space wrap>
             <el-button size="small" type="primary" @click="goToDetail(scope.row.id)">查看</el-button>
