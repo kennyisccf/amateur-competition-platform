@@ -9,6 +9,7 @@
           <el-icon><User /></el-icon>
         </div>
         <h2>{{ userInfo.nickname || userInfo.username }}</h2>
+        <p>当前积分：{{ userInfo.points || 0 }}</p>
         <!-- <p>全栈运动爱好者 | 专注{{ userInfo.skills || '篮球与MOBA' }}</p> -->
         
         <!-- <div class="stats-row"> -->
@@ -37,12 +38,15 @@
         <h3>参赛痕迹时间轴</h3>
         <div v-if="loading" class="loading">加载中...</div>
         <div v-else class="timeline">
-          <div class="timeline-item" v-for="item in historyList" :key="item.id">
+          <div class="timeline-item" :class="{ hidden: !item.showInProfile }" v-for="item in historyList" :key="item.id">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
               <div class="timeline-title">
                 <span>
                   {{ item.title }}
+                  <el-tag size="small" :type="item.competitionType === 'PRIVATE' ? 'warning' : 'success'" class="type-tag">
+                    {{ item.competitionTypeText }}
+                  </el-tag>
                 </span>
                 <div class="action-area">              
                   <span
@@ -50,9 +54,22 @@
                     :class="item.status"
                   >
                     {{ item.statusText }}
-                  </span>                
+                  </span>
+                  <el-switch
+                    v-model="item.showInProfile"
+                    size="small"
+                    active-text="展示"
+                    inactive-text="隐藏"
+                    @change="updateTraceVisibility(item)"
+                  />
                   <el-button
-                    v-if="item.status !== 'finished'"
+                    size="small"
+                    type="primary"
+                    link
+                    @click="router.push(`/event-detail/${item.competitionId}`)"
+                  >查看详情</el-button>
+                  <el-button
+                    v-if="item.canCancel"
                     size="small"
                     type="danger"
                     link
@@ -61,7 +78,14 @@
                 </div>   
               </div>
               <div class="timeline-time">{{ item.time }}</div>
-              <div class="timeline-desc">{{ item.desc }}</div>
+              <div class="timeline-desc">
+                <span>人数：{{ item.participantCount }}/{{ item.maxParticipants }}</span>
+                <template v-if="item.isFinished">
+                  <span>成绩：{{ item.finalScore || '-' }}</span>
+                  <span>排名：{{ item.finalRank || '-' }}</span>
+                  <span v-if="item.competitionType !== 'PRIVATE'">获得积分：{{ item.earnedPoints || 0 }}</span>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -97,7 +121,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
-import axios from 'axios'
 import { ElMessage , ElMessageBox} from 'element-plus'
 import request from '@/utils/request'
 const router = useRouter()
@@ -112,12 +135,7 @@ const form = ref({})
 const loadUserInfo = async () => {
   loading.value = true
   try {
-    const res = await axios.get(
-      'http://localhost:8000/api/user/',
-      {
-        withCredentials: true
-      }
-    )
+    const res = await request.get('/api/user/')
     if (res.data.success) {
       userInfo.value = res.data.data
       form.value = {
@@ -126,12 +144,7 @@ const loadUserInfo = async () => {
       }
       userRole.value = res.data.data.role
     }
-    const regRes = await axios.get(
-      'http://localhost:8000/api/my_registrations/',
-      {
-        withCredentials: true
-      }
-    )
+    const regRes = await request.get('/api/my_registrations/')
     if (regRes.data.success) {
       historyList.value = regRes.data.data
     }
@@ -143,14 +156,11 @@ const loadUserInfo = async () => {
 }
 const handleUpdateInfo = async () => {
   try {
-    const res = await axios.post(
-      'http://localhost:8000/api/update_user/',
+    const res = await request.post(
+      '/api/update_user/',
       {
         nickname: form.value.nickname,
         email: form.value.email
-      },
-      {
-        withCredentials: true
       }
     )
     if (res.data.success) {
@@ -170,13 +180,10 @@ const cancelRegistration = async (registrationId) => {
         type: 'warning'
       }
     )
-    const res = await axios.post(
-      'http://localhost:8000/api/cancel_registration/',
+    const res = await request.post(
+      '/api/cancel_registration/',
       {
         registration_id: registrationId
-      },
-      {
-        withCredentials: true
       }
     )
     if(res.data.success){
@@ -186,7 +193,27 @@ const cancelRegistration = async (registrationId) => {
       ElMessage.error(res.data.msg)
     }
   } catch(err){
-    console.log(err)
+    if (!['cancel', 'close'].includes(err)) {
+      ElMessage.error('取消报名失败')
+    }
+  }
+}
+
+const updateTraceVisibility = async (item) => {
+  try {
+    const res = await request.post('/api/registrations/visibility/', {
+      registration_id: item.id,
+      show_in_profile: item.showInProfile
+    })
+    if (res.data.success) {
+      ElMessage.success(item.showInProfile ? '已展示该参赛痕迹' : '已隐藏该参赛痕迹')
+    } else {
+      ElMessage.error(res.data.msg || '设置失败')
+      item.showInProfile = !item.showInProfile
+    }
+  } catch (err) {
+    ElMessage.error('设置失败')
+    item.showInProfile = !item.showInProfile
   }
 }
 
@@ -289,6 +316,9 @@ onMounted(() => {
 .timeline-item:last-child {
   border-left: none;
 }
+.timeline-item.hidden {
+  opacity: 0.5;
+}
 .timeline-dot {
   position: absolute;
   left: -6px;
@@ -316,14 +346,28 @@ onMounted(() => {
   background: #f6ffed;
   color: #52c41a;
 }
+.timeline-status.ongoing {
+  background: #f6ffed;
+  color: #52c41a;
+}
+.timeline-status.rejected {
+  background: #fff2f0;
+  color: #f5222d;
+}
 .timeline-time {
   font-size: 14px;
   color: #666;
   margin: 4px 0;
 }
 .timeline-desc {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
   font-size: 14px;
   color: #333;
+}
+.type-tag {
+  margin-left: 8px;
 }
 .edit-card {
   background: white;

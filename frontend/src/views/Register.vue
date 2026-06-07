@@ -74,8 +74,8 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 const router = useRouter()
 
@@ -108,7 +108,7 @@ const handleRegister = async () => {
 
   try {
     // 1. 获取CSRF Token
-    const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    const csrfRes = await request.get('/csrf/')
     const csrfToken = csrfRes.data.csrfToken
 
     // 2. 构造FormData（接口要求form-data格式，不支持JSON）
@@ -121,8 +121,8 @@ const handleRegister = async () => {
     if (form.value.email) formData.append('email', form.value.email)
 
     // 3. 调用注册接口
-    const res = await axios.post(
-      'http://localhost:8000/api/register/',
+    const res = await request.post(
+      '/api/register/',
       formData,
       {
         headers: {

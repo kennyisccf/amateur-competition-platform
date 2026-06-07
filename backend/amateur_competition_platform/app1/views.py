@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from hashlib import md5
@@ -6,9 +6,12 @@ import hashlib
 from app1 import models
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction, connection
+from django.db.models import Q
 import json
 import string
 import random
+import re
 from functools import wraps
 @csrf_exempt
 def login(request):
@@ -18,35 +21,290 @@ def login(request):
         data = json.loads(request.body)
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
+        captcha = data.get("captcha", "").strip().upper()
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
-    if not username or not password:
-        return JsonResponse({"success": False, "msg": "用户名或密码不能为空"})
+    if not username:
+        return JsonResponse({"success": False, "msg": "用户名不能为空"})
     user = models.User.objects.filter(username=username).first()
     if not user:
         return JsonResponse({"success": False, "msg": "用户不存在"})
     if user.is_deleted:
         return JsonResponse({"success": False, "msg": "该账号已被封禁"}, status=403)
-    password_md5 = hashlib.md5(password.encode()).hexdigest()
-    if user.password != password_md5:
-        return JsonResponse({"success": False, "msg": "密码错误"})
+    auto_login = is_auto_login_test_user(user) and not password and not captcha
+    if not auto_login:
+        if not password or not captcha:
+            return JsonResponse({"success": False, "msg": "普通账号需要填写密码和验证码"})
+        expected_captcha = request.session.get("login_captcha", "")
+        if not expected_captcha or captcha != expected_captcha:
+            return JsonResponse({"success": False, "msg": "验证码错误或已失效"})
+        request.session.pop("login_captcha", None)
+        password_md5 = hashlib.md5(password.encode()).hexdigest()
+        if user.password != password_md5:
+            return JsonResponse({"success": False, "msg": "密码错误"})
     request.session["user_id"] = user.id
     request.session["username"] = user.username
     request.session["role"] = user.role
-    return JsonResponse({"success": True, "msg": "登录成功", "user_id": user.id, "role": user.role})
+    return JsonResponse({
+        "success": True,
+        "msg": "测试账号免密码登录成功" if auto_login else "登录成功",
+        "user_id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "is_super_admin": is_super_admin(user)
+    })
 
 @csrf_exempt
 def logout(request):
     request.session.flush()
     return JsonResponse({"success": True, "msg": "退出登录"})
 
+def login_captcha(request):
+    if request.method != "GET":
+        return JsonResponse({"success": False, "msg": "仅支持 GET"}, status=405)
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    code = ''.join(random.SystemRandom().choice(alphabet) for _ in range(4))
+    request.session["login_captcha"] = code
+    return JsonResponse({"success": True, "captcha": code})
+
 def login_required(func):
     @wraps(func)
     def wrapper(request, *args, **kwargs):
-        if not request.session.get("user_id"):
+        user = models.User.objects.filter(
+            id=request.session.get("user_id"),
+            is_deleted=False
+        ).first()
+        if not user:
+            request.session.flush()
             return JsonResponse({"success": False, "msg": "请先登录"}, status=401)
+        request.current_user = user
         return func(request, *args, **kwargs)
     return wrapper
+
+def role_required(*roles):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(request, *args, **kwargs):
+            user = models.User.objects.filter(
+                id=request.session.get("user_id"),
+                is_deleted=False
+            ).first()
+            if not user:
+                request.session.flush()
+                return JsonResponse({"success": False, "msg": "请先登录"}, status=401)
+            if user.role != "ADMIN" and user.role not in roles:
+                return JsonResponse({"success": False, "msg": "无操作权限"}, status=403)
+            request.current_user = user
+            return func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+def manageable_competitions(user):
+    competitions = models.Competition.objects.all()
+    if user.role == "ADMIN":
+        return competitions
+    return competitions.filter(organizer=user)
+
+def manageable_registrations(user):
+    registrations = models.Registration.objects.all()
+    if user.role == "ADMIN":
+        return registrations
+    return registrations.filter(competition__organizer=user)
+
+def parse_bracket_state(competition):
+    try:
+        state = json.loads(competition.bracket_state or "{}")
+    except (TypeError, json.JSONDecodeError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    return {
+        "drawSeed": state.get("drawSeed") or (competition.id * 100003),
+        "winners": state.get("winners") if isinstance(state.get("winners"), dict) else {},
+        "rankings": state.get("rankings") if isinstance(state.get("rankings"), list) else []
+    }
+
+def serialize_registration(registration):
+    return {
+        "registration_id": registration.id,
+        "player_id": registration.player.id,
+        "username": registration.player.username,
+        "nickname": registration.player.nickname,
+        "player_points": registration.player.points,
+        "status": registration.status,
+        "review_status": registration.review_status,
+        "audit_remark": registration.audit_remark,
+        "register_type": registration.register_type,
+        "team_name": registration.team_name,
+        "team_members": registration.team_members,
+        "contact_name": registration.contact_name,
+        "phone": registration.phone,
+        "final_score": registration.final_score,
+        "final_rank": registration.final_rank,
+        "earned_points": registration.earned_points,
+        "registration_time": registration.registration_time
+    }
+
+def can_view_competition_bracket(user, competition):
+    if competition.type == "PUBLIC":
+        return True
+    if user.role == "ADMIN" or competition.organizer_id == user.id:
+        return True
+    return models.Registration.objects.filter(
+        competition=competition,
+        player=user,
+        review_status__in=[0, 1]
+    ).exists()
+
+COMPETITION_FORMATS = {
+    "SINGLE_ELIMINATION": "单淘汰",
+}
+
+def generate_competition_no(competition_id):
+    return f"NO.{int(competition_id):08d}"
+
+def normalize_member_names(raw_text):
+    names = [
+        item.strip()
+        for item in re.split(r"[\s,，、;；]+", raw_text or "")
+        if item.strip()
+    ]
+    return list(dict.fromkeys(names))
+
+def is_super_admin(user):
+    return bool(user and user.role == "ADMIN" and user.username == "test_admin")
+
+def is_auto_login_test_user(user):
+    email = (user.email or "").lower()
+    return bool(user and user.role != "ADMIN" and email.endswith("@lesai.test"))
+
+def normalize_bracket_rankings(raw_rankings):
+    if not isinstance(raw_rankings, list):
+        return []
+    rankings = []
+    seen = set()
+    for item in raw_rankings[:200]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            registration_id = int(item.get("registration_id"))
+            final_rank = int(item.get("final_rank"))
+        except (TypeError, ValueError):
+            continue
+        if registration_id <= 0 or final_rank <= 0 or registration_id in seen:
+            continue
+        seen.add(registration_id)
+        final_score = str(item.get("final_score") or "").strip()[:50]
+        rankings.append({
+            "registration_id": registration_id,
+            "final_rank": final_rank,
+            "final_score": final_score
+        })
+    return rankings
+
+def apply_bracket_rankings(competition, rankings):
+    approved = models.Registration.objects.filter(
+        competition=competition,
+        review_status=1
+    )
+    previous_awards = list(
+        approved.filter(earned_points__gt=0).select_related("player")
+    )
+    for registration in previous_awards:
+        player = registration.player
+        player.points = max(0, (player.points or 0) - (registration.earned_points or 0))
+        player.save(update_fields=["points"])
+
+    approved.update(
+        final_score="",
+        final_rank=0,
+        earned_points=0,
+        status="ongoing"
+    )
+    registration_map = {
+        item.id: item
+        for item in approved.select_for_update().select_related("player")
+    }
+    try:
+        public_champion_points = int(competition.reward_points or 0)
+    except (TypeError, ValueError):
+        public_champion_points = 0
+
+    for ranking in rankings:
+        registration = registration_map.get(ranking["registration_id"])
+        if not registration:
+            continue
+        registration.final_rank = ranking["final_rank"]
+        registration.final_score = ranking["final_score"]
+        registration.earned_points = (
+            public_champion_points
+            if competition.type == "PUBLIC" and registration.final_rank == 1
+            else 0
+        )
+        registration.status = "finished"
+        registration.save(update_fields=["final_rank", "final_score", "earned_points", "status"])
+        if registration.earned_points > 0:
+            player = registration.player
+            player.points = (player.points or 0) + registration.earned_points
+            player.save(update_fields=["points"])
+
+def delete_competitions_by_ids(competition_ids):
+    competition_ids = [int(item) for item in competition_ids if item]
+    if not competition_ids:
+        return 0
+    models.Registration.objects.filter(competition_id__in=competition_ids).delete()
+    models.AuditRecord.objects.filter(competition_id__in=competition_ids).delete()
+    placeholders = ", ".join(["%s"] * len(competition_ids))
+    with connection.cursor() as cursor:
+        try:
+            cursor.execute(f"DELETE FROM notice WHERE competition_id IN ({placeholders})", competition_ids)
+        except Exception:
+            pass
+    deleted_count, _ = models.Competition.objects.filter(id__in=competition_ids).delete()
+    return deleted_count
+
+def delete_user_from_database(user, current_user):
+    if not user or user.id == current_user.id:
+        return False
+    owned_competition_ids = list(
+        models.Competition.objects.filter(organizer=user).values_list("id", flat=True)
+    )
+    delete_competitions_by_ids(owned_competition_ids)
+    player_registrations = list(
+        models.Registration.objects.select_related("competition")
+        .filter(player=user)
+        .exclude(competition_id__in=owned_competition_ids)
+    )
+    for registration in player_registrations:
+        competition = registration.competition
+        if registration.review_status == 1 and competition.current_participants > 0:
+            competition.current_participants -= 1
+            competition.save(update_fields=["current_participants"])
+    models.Registration.objects.filter(player=user).delete()
+    models.AuditRecord.objects.filter(auditor=user).delete()
+    user.delete()
+    return True
+
+def unique_test_username(prefix):
+    index = 1
+    while True:
+        username = f"{prefix}{index:02d}"
+        if not models.User.objects.filter(username=username).exists():
+            return username
+        index += 1
+
+def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role="PLAYER"):
+    username = unique_test_username(prefix)
+    return models.User.objects.create(
+        username=username,
+        password=hashlib.md5("".encode()).hexdigest(),
+        role=role,
+        nickname=f"{nickname_prefix}{username[-2:]}",
+        email=f"{username}@lesai.test",
+        points=0,
+        created_at=datetime.now(),
+        is_deleted=False
+    )
 
 @csrf_exempt
 def register(request):
@@ -66,7 +324,9 @@ def register(request):
         return JsonResponse({"success": False, "msg": "用户名不能超过50字符"})
     if len(nickname) > 50:
         return JsonResponse({"success": False, "msg": "昵称不能超过50个字符"})
-    if models.User.objects.filter(username=username, is_deleted=False).exists():
+    if role not in {"PLAYER", "ORGANIZER", "ADMIN"}:
+        return JsonResponse({"success": False, "msg": "用户角色错误"})
+    if models.User.objects.filter(username=username).exists():
         return JsonResponse({"success": False, "msg": "用户名已存在"})
     password_md5 = hashlib.md5(password.encode()).hexdigest()
     models.User.objects.create(
@@ -83,21 +343,21 @@ def register(request):
 @csrf_exempt
 def competition_list(request):
     c_category = request.GET.get("category", "")
-    keyword = request.GET.get("keyword", "")
-    competitions = models.Competition.objects.filter(
-        status=1
-    )
+    keyword = request.GET.get("keyword", "").strip()
+    competitions = models.Competition.objects.filter(status__in=[1, 2])
     if c_category:
         competitions = competitions.filter(category__icontains=c_category)
     if keyword:
         competitions = competitions.filter(
-            title__icontains=keyword
+            Q(title__icontains=keyword) |
+            Q(competition_no__icontains=keyword)
         )
     competitions = competitions.order_by("-created_at")
     data = []
     for c in competitions:
         data.append({
             "id": c.id,
+            "competition_no": c.competition_no or generate_competition_no(c.id),
             "title": c.title,
             "category": c.category,
             "location": c.location,
@@ -107,6 +367,9 @@ def competition_list(request):
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
+            "competition_format": c.competition_format,
+            "competition_format_text": COMPETITION_FORMATS.get(c.competition_format, "单淘汰"),
+            "group_count": c.group_count,
             "start_time": c.start_time.strftime("%Y-%m-%d %H:%M:%S"),
             "end_time": c.end_time.strftime("%Y-%m-%d %H:%M:%S"),
             "created_at": c.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -124,8 +387,20 @@ def competition_list(request):
 @csrf_exempt
 def competition_detail(request, competition_id):
     competition = models.Competition.objects.filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
+    current_user = models.User.objects.filter(
+        id=request.session.get("user_id"),
+        is_deleted=False
+    ).first()
+    can_manage = bool(
+        current_user and (
+            current_user.role == "ADMIN" or competition.organizer_id == current_user.id
+        )
+    )
     data = {
         "id": competition.id,
+        "competition_no": competition.competition_no or generate_competition_no(competition.id),
         "title": competition.title,
         "category": getattr(competition, "category", ""),
         "location": getattr(competition, "location", ""),
@@ -141,21 +416,22 @@ def competition_detail(request, competition_id):
         "current_participants": competition.current_participants,
         "reward_points": getattr(competition, "reward_points", 100),
         "reward": competition.reward,
+        "competition_format": competition.competition_format,
+        "competition_format_text": COMPETITION_FORMATS.get(competition.competition_format, "单淘汰"),
+        "group_count": competition.group_count,
         "start_time": competition.start_time,
         "end_time": competition.end_time,
         "created_at": competition.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "can_manage": can_manage,
     }
+    if competition.type == "PRIVATE" and can_manage:
+        data["invite_code"] = competition.invite_code
     return JsonResponse({"success": True, "data": data})
 
 @csrf_exempt
 @login_required
 def user_detail(request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return JsonResponse({"success": False, "msg": "未登录"})
-    user = models.User.objects.filter(id=user_id).first()
-    if not user:
-        return JsonResponse({"success": False,"msg": "用户不存在"})
+    user = request.current_user
     data = {
         "id": user.id,
         "username": user.username,
@@ -165,6 +441,7 @@ def user_detail(request):
         "points": user.points,
         "created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         "is_deleted": user.is_deleted,
+        "is_super_admin": is_super_admin(user),
     }
     return JsonResponse({"success": True, "data": data})
 
@@ -175,10 +452,7 @@ def update_user(request):
         return JsonResponse({"success": False, "msg": "请求方式错误"})
     try:
         data = json.loads(request.body)
-        user_id = request.session.get("user_id")
-        user = models.User.objects.filter(id=user_id).first()
-        if not user:
-            return JsonResponse({"success": False, "msg": "用户不存在"})
+        user = request.current_user
         user.nickname = data.get("nickname", user.nickname)
         user.email = data.get("email", user.email)
         user.save()
@@ -188,41 +462,89 @@ def update_user(request):
         return JsonResponse({"success": False, "msg": str(e)})
 
 @csrf_exempt
-@login_required
+@role_required("ORGANIZER", "PLAYER")
 def register_competition(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
     try:
         data = json.loads(request.body)
-        player_id = data.get("player_id")
         competition_id = data.get("competition_id")
         invite_code = (data.get("invite_code") or '').strip()
+        register_type = data.get("register_type", "single")
+        team_name = data.get("team_name", "").strip()
+        team_members = normalize_member_names(data.get("team_members", ""))
+        contact_name = data.get("contact_name", "").strip()
+        phone = data.get("phone", "").strip()
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
-    player = models.User.objects.filter(id=player_id, role='PLAYER').first()
-    if not player:
-        return JsonResponse({"success": False, "msg": "用户不存在"})
+    player = request.current_user
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False, "msg": "赛事不存在"})
+    if competition.status != 1:
+        return JsonResponse({"success": False, "msg": "当前赛事不可报名"})
+    if player.role == "ORGANIZER" and not (
+        competition.type == "PRIVATE" and competition.organizer_id == player.id
+    ):
+        return JsonResponse({"success": False, "msg": "主办方只能报名自己创建的私人赛事"}, status=403)
+    if competition.current_participants >= competition.max_participants:
+        return JsonResponse({"success": False, "msg": "赛事人数已满"})
     if models.Registration.objects.filter(player=player, competition=competition).exists():
         return JsonResponse({"success": False, "msg": "你已报名该赛事"})
+    if register_type not in {"single", "team"}:
+        return JsonResponse({"success": False, "msg": "报名类型错误"})
+    if register_type == "team" and not team_name:
+        return JsonResponse({"success": False, "msg": "战队报名需要填写战队名"})
+    if register_type == "single":
+        team_name = team_name or player.nickname or player.username
+    if not team_members:
+        return JsonResponse({"success": False, "msg": "请填写参赛选手账号"})
+    if player.username not in team_members:
+        return JsonResponse({"success": False, "msg": "选手账号列表必须包含当前登录账号"})
+    if len(team_name) > 100 or len(contact_name) > 50 or len(phone) > 50:
+        return JsonResponse({"success": False, "msg": "报名信息长度超出限制"})
+    existing_users = set(models.User.objects.filter(
+        username__in=team_members,
+        is_deleted=False
+    ).values_list("username", flat=True))
+    missing_users = [name for name in team_members if name not in existing_users]
+    if missing_users:
+        return JsonResponse({
+            "success": False,
+            "msg": f"以下选手账号不存在或已被封禁：{', '.join(missing_users)}"
+        })
     if competition.type == 'PRIVATE':
         if not invite_code:
             return JsonResponse({"success": False, "msg": "私人赛需要提供邀请码"})
         if invite_code != competition.invite_code:
             return JsonResponse({"success": False, "msg": "邀请码错误"})
+    else:
+        invite_code = ''
+    auto_approve = competition.type == "PRIVATE" and competition.organizer_id == player.id
     models.Registration.objects.create(
         player=player,
         competition=competition,
-        status=1,
+        status='ongoing' if auto_approve else 'pending',
+        review_status=1 if auto_approve else 0,
         invite_code=invite_code,
+        register_type=register_type,
+        team_name=team_name,
+        team_members=', '.join(team_members),
+        contact_name=contact_name or player.nickname or player.username,
+        phone=phone or "系统消息通知",
         final_score='',
         final_rank=0,
-        earned_points=0
+        earned_points=0,
+        audit_remark="创建者报名自动通过" if auto_approve else ""
     )
+    if auto_approve:
+        competition.current_participants += 1
+        competition.save(update_fields=["current_participants"])
 
-    return JsonResponse({"success": True, "msg": "报名成功"})
+    return JsonResponse({
+        "success": True,
+        "msg": "报名成功，已自动通过" if auto_approve else "报名成功"
+    })
 
 
 def generate_invite_code(length=6):
@@ -231,6 +553,7 @@ def generate_invite_code(length=6):
 
 
 @csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
 def create_competition(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
@@ -241,22 +564,34 @@ def create_competition(request):
         location = data.get("location", "").strip()
         description = data.get("description", "").strip()
         competition_type = data.get("competition_type", "").strip()
-        organizer_id = data.get("organizer_id")
         max_participants = data.get("max_participants", 100)
         reward_points = data.get("reward_points", 100)
         reward = data.get("reward", "").strip()
+        competition_format = "SINGLE_ELIMINATION"
+        group_count = data.get("group_count", 0)
         start_time = data.get("start_time")
         end_time = data.get("end_time")
     except Exception:
         return JsonResponse({"success": False, "msg": "请求格式错误"})
-    if not title:
-        return JsonResponse({"success": False, "msg": "标题不能为空"})
-    organizer = models.User.objects.filter(
-        id=organizer_id,
-        role='ORGANIZER'
-    ).first()
-    if not organizer:
-        return JsonResponse({"success": False, "msg": "主办方不存在"})
+    if not title or not category or not location:
+        return JsonResponse({"success": False, "msg": "请填写完整赛事信息"})
+    if competition_type not in {"PUBLIC", "PRIVATE"}:
+        return JsonResponse({"success": False, "msg": "赛事类型错误"})
+    if request.current_user.role == "PLAYER" and competition_type != "PRIVATE":
+        return JsonResponse({"success": False, "msg": "参赛者只能创建私人赛事"}, status=403)
+    try:
+        max_participants = int(max_participants)
+        reward_points = int(reward_points)
+        group_count = 0
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "msg": "人数、积分和分组数必须是整数"})
+    if competition_type == "PRIVATE":
+        reward_points = 0
+    if max_participants <= 0 or reward_points < 0:
+        return JsonResponse({"success": False, "msg": "人数或积分设置不合法"})
+    if not start_time or not end_time or str(end_time) <= str(start_time):
+        return JsonResponse({"success": False, "msg": "比赛时间设置不合法"})
+    organizer = request.current_user
     status = 0 if competition_type == "PUBLIC" else 1
     invite_code = ''
     if competition_type == 'PRIVATE':
@@ -273,19 +608,32 @@ def create_competition(request):
         current_participants=0,
         reward_points=reward_points,
         reward=reward,
+        competition_format=competition_format,
+        group_count=group_count,
         start_time=start_time,
         end_time=end_time,
         invite_code=invite_code
     )
-    return JsonResponse({"success": True, "msg": "赛事创建成功", "competition_id": competition.id, "status": competition.status, "invite_code": invite_code})
+    competition.competition_no = generate_competition_no(competition.id)
+    competition.save(update_fields=["competition_no"])
+    return JsonResponse({
+        "success": True,
+        "msg": "赛事创建成功",
+        "competition_id": competition.id,
+        "competition_no": competition.competition_no,
+        "status": competition.status,
+        "invite_code": invite_code
+    })
 
 @csrf_exempt
+@role_required("ADMIN")
 def pending_competitions(request): #管理员查看待审核的赛事
     competitions = models.Competition.objects.filter(type='PUBLIC',status=0).order_by('-created_at')
     data = []
     for c in competitions:
         data.append({
             "id": c.id,
+            "competition_no": c.competition_no or generate_competition_no(c.id),
             "title": c.title,
             "category": c.category,
             "location": c.location,
@@ -294,6 +642,9 @@ def pending_competitions(request): #管理员查看待审核的赛事
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
+            "competition_format": c.competition_format,
+            "competition_format_text": COMPETITION_FORMATS.get(c.competition_format, "单淘汰"),
+            "group_count": c.group_count,
             "start_time": c.start_time,
             "end_time": c.end_time,
             "organizer": {
@@ -305,18 +656,12 @@ def pending_competitions(request): #管理员查看待审核的赛事
     return JsonResponse({"success": True,"data": data})
 
 @csrf_exempt
-@login_required
+@role_required("ADMIN")
 def review_competition(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"})
 
-    admin = models.User.objects.filter(
-        id=request.session.get("user_id"),
-        role="ADMIN"
-    ).first()
-
-    if not admin:
-        return JsonResponse({"success": False, "msg": "无管理员权限"}, status=403)
+    admin = request.current_user
 
     try:
         data = json.loads(request.body)
@@ -338,6 +683,8 @@ def review_competition(request):
         competition.status = 1
         result = 1
     elif status == 4:
+        if not reason:
+            return JsonResponse({"success": False, "msg": "请填写驳回原因"})
         competition.status = 4
         competition.reject_reason = reason
         result = 2
@@ -356,27 +703,39 @@ def review_competition(request):
     return JsonResponse({"success": True, "msg": "审核完成"})
 
 @csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
 def my_competitions(request):
-    organizer_id = request.GET.get("organizer_id")
     status = request.GET.get("status", "")
     competition_type = request.GET.get("type", "")
     keyword = request.GET.get("keyword", "").strip()
-    organizer = models.User.objects.filter(id=organizer_id,role='ORGANIZER').first()
-    if not organizer:
-        return JsonResponse({"success": False,"msg": "主办方不存在"})
-
-    competitions = models.Competition.objects.filter(organizer=organizer)
+    scope = request.GET.get("scope", "visible")
+    if scope == "managed":
+        competitions = manageable_competitions(request.current_user)
+    elif request.current_user.role == "ADMIN":
+        competitions = models.Competition.objects.all()
+    else:
+        joined_competition_ids = models.Registration.objects.filter(
+            player=request.current_user,
+            review_status__in=[0, 1]
+        ).values_list("competition_id", flat=True)
+        competitions = models.Competition.objects.filter(
+            Q(organizer=request.current_user) | Q(id__in=joined_competition_ids)
+        ).distinct()
     if status != "":
         competitions = competitions.filter(status=status)
     if competition_type:
         competitions = competitions.filter(type=competition_type)
     if keyword:
-        competitions = competitions.filter(title__icontains=keyword)
+        competitions = competitions.filter(
+            Q(title__icontains=keyword) |
+            Q(competition_no__icontains=keyword)
+        )
     competitions = competitions.order_by('-created_at')
     data = []
     for c in competitions:
         data.append({
             "id": c.id,
+            "competition_no": c.competition_no or generate_competition_no(c.id),
             "title": c.title,
             "category": c.category,
             "location": c.location,
@@ -386,29 +745,35 @@ def my_competitions(request):
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
+            "competition_format": c.competition_format,
+            "competition_format_text": COMPETITION_FORMATS.get(c.competition_format, "单淘汰"),
+            "group_count": c.group_count,
             "start_time": c.start_time,
             "end_time": c.end_time,
             "created_at": c.created_at,
             "invite_code": c.invite_code,
-            "reject_reason": c.reject_reason
+            "reject_reason": c.reject_reason,
+            "can_manage": request.current_user.role == "ADMIN" or c.organizer_id == request.current_user.id
         })
     return JsonResponse({"success": True,"competitions": data})
 
 
 @csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
 def delete_competition(request, competition_id):
     if request.method != "DELETE":
         return JsonResponse({"success": False,"msg": "仅支持 DELETE"})
-    competition = models.Competition.objects.filter(id=competition_id).first()
+    competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False,"msg": "赛事不存在"})
-    competition.delete()
+    delete_competitions_by_ids([competition.id])
     return JsonResponse({"success": True,"msg": "删除成功"})
 
 @csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
 def update_competition(request, competition_id):
     if request.method != "PUT":return JsonResponse({"success": False,"msg": "仅支持 PUT"})
-    competition = models.Competition.objects.filter(id=competition_id).first()
+    competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False,"msg": "赛事不存在"})
     try:
@@ -417,8 +782,18 @@ def update_competition(request, competition_id):
         competition.category = data.get("category",competition.category)
         competition.location = data.get("location",competition.location)
         competition.description = data.get("description",competition.description)
-        competition.max_participants = data.get("max_participants",competition.max_participants)
-        competition.reward_points = data.get("reward_points",competition.reward_points)
+        max_participants = int(data.get("max_participants",competition.max_participants))
+        reward_points = int(data.get("reward_points",competition.reward_points))
+        competition_format = "SINGLE_ELIMINATION"
+        group_count = 0
+        if competition.type == "PRIVATE":
+            reward_points = 0
+        if max_participants < competition.current_participants or max_participants <= 0 or reward_points < 0:
+            return JsonResponse({"success": False,"msg": "人数或积分设置不合法"})
+        competition.max_participants = max_participants
+        competition.reward_points = reward_points
+        competition.competition_format = competition_format
+        competition.group_count = group_count
         competition.reward = data.get("reward",competition.reward)
         competition.save()
     except Exception:
@@ -426,23 +801,74 @@ def update_competition(request, competition_id):
 
     return JsonResponse({"success": True,"msg": "修改成功"})
 
+@login_required
 def competition_registrations(request, competition_id):
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False,"msg": "赛事不存在"})
+    if not can_view_competition_bracket(request.current_user, competition):
+        return JsonResponse({"success": False, "msg": "暂无查看该赛事报名信息的权限"}, status=403)
     registrations = models.Registration.objects.filter(competition=competition)
     data = []
     for r in registrations:
-        data.append({
-            "registration_id": r.id,
-            "player_id": r.player.id,
-            "username": r.player.username,
-            "nickname": r.player.nickname,
-            "status": r.status,
-            "review_status": r.review_status,
-            "registration_time": r.registration_time
+        data.append(serialize_registration(r))
+    return JsonResponse({
+        "success": True,
+        "registrations": data,
+        "bracket_state": parse_bracket_state(competition)
+    })
+
+@login_required
+@csrf_exempt
+def competition_bracket(request, competition_id):
+    competition = models.Competition.objects.filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
+
+    if request.method == "GET":
+        if not can_view_competition_bracket(request.current_user, competition):
+            return JsonResponse({"success": False, "msg": "暂无查看该赛事赛程的权限"}, status=403)
+        registrations = models.Registration.objects.filter(
+            competition=competition,
+            review_status=1
+        ).select_related("player")
+        return JsonResponse({
+            "success": True,
+            "registrations": [serialize_registration(reg) for reg in registrations],
+            "bracket_state": parse_bracket_state(competition)
         })
-    return JsonResponse({"success": True,"registrations": data})
+
+    if request.method == "POST":
+        editable_competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
+        if not editable_competition:
+            return JsonResponse({"success": False, "msg": "暂无保存该赛事赛程的权限"}, status=403)
+        try:
+            data = json.loads(request.body)
+            state = data.get("bracket_state", {})
+        except (TypeError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+        if not isinstance(state, dict):
+            return JsonResponse({"success": False, "msg": "赛程数据格式错误"}, status=400)
+        winners = state.get("winners", {})
+        if not isinstance(winners, dict):
+            winners = {}
+        rankings = normalize_bracket_rankings(state.get("rankings", []))
+        safe_state = {
+            "drawSeed": state.get("drawSeed") or (competition.id * 100003),
+            "winners": winners,
+            "rankings": rankings
+        }
+        with transaction.atomic():
+            editable_competition.bracket_state = json.dumps(safe_state, ensure_ascii=False)
+            editable_competition.save(update_fields=["bracket_state"])
+            apply_bracket_rankings(editable_competition, rankings)
+        return JsonResponse({
+            "success": True,
+            "msg": "赛程已保存",
+            "bracket_state": safe_state
+        })
+
+    return JsonResponse({"success": False, "msg": "请求方法不支持"}, status=405)
 
 @login_required
 @csrf_exempt
@@ -458,20 +884,65 @@ def my_registrations(request):
             1: "报名成功",
             2: "已驳回"
         }
+        status_text = "已完赛" if reg.status == "finished" else status_map.get(
+            reg.review_status,
+            "未知状态"
+        )
+        display_status = (
+            "finished" if reg.status == "finished"
+            else "rejected" if reg.review_status == 2
+            else "ongoing" if reg.review_status == 1
+            else "processing"
+        )
+        description = reg.audit_remark or ""
+        if reg.status == "finished":
+            score_text = f"成绩：{reg.final_score or '-'}，排名：{reg.final_rank or '-'}"
+            if reg.competition.type != "PRIVATE":
+                score_text += f"，获得积分：{reg.earned_points or 0}"
+            description = score_text
         result.append({
             "id": reg.id,
+            "competitionId": reg.competition.id,
             "title": reg.competition.title,
+            "competitionType": reg.competition.type,
+            "competitionTypeText": "私人赛" if reg.competition.type == "PRIVATE" else "公开赛",
+            "participantCount": reg.competition.current_participants,
+            "maxParticipants": reg.competition.max_participants,
+            "finalScore": reg.final_score or "",
+            "finalRank": reg.final_rank or 0,
+            "earnedPoints": reg.earned_points or 0,
+            "isFinished": reg.status == "finished",
             "time": reg.registration_time.strftime(
                 "%Y-%m-%d %H:%M"
             ),
-            "desc": reg.audit_remark or "",
-            "status":
-                "finished" if reg.review_status == 1
-                else "processing",
-            "statusText":
-                status_map.get(reg.review_status, "未知状态")
+            "desc": description,
+            "status": display_status,
+            "statusText": status_text,
+            "canCancel": reg.competition.status == 1 and reg.status != "finished",
+            "showInProfile": reg.show_in_profile
         })
     return JsonResponse({"success": True,"data": result})
+
+@login_required
+@csrf_exempt
+def update_registration_visibility(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+        show_in_profile = bool(data.get("show_in_profile"))
+    except Exception:
+        return JsonResponse({"success": False, "msg": "参数错误"}, status=400)
+    registration = models.Registration.objects.filter(
+        id=registration_id,
+        player=request.current_user
+    ).first()
+    if not registration:
+        return JsonResponse({"success": False, "msg": "报名记录不存在"}, status=404)
+    registration.show_in_profile = show_in_profile
+    registration.save(update_fields=["show_in_profile"])
+    return JsonResponse({"success": True, "msg": "参赛痕迹展示设置已保存"})
 
 @login_required
 @csrf_exempt
@@ -488,6 +959,8 @@ def cancel_registration(request):
     if not registration:
         return JsonResponse({"success": False,"msg": "报名记录不存在"})
     competition = registration.competition
+    if competition.status != 1 or registration.status == "finished":
+        return JsonResponse({"success": False, "msg": "当前报名不可取消"})
     was_approved = registration.review_status == 1
     registration.delete()
 
@@ -497,13 +970,16 @@ def cancel_registration(request):
     return JsonResponse({"success": True,"msg": "取消报名成功"})
 
 @csrf_exempt
-@login_required
+@role_required("ORGANIZER", "PLAYER")
 def approve_registration(request):
     if request.method != "POST":
         return JsonResponse({"success":False,"msg":"仅支持POST"})
-    data = json.loads(request.body)
-    registration_id = data.get("registration_id")
-    reg = models.Registration.objects.filter(id=registration_id).first()
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    reg = manageable_registrations(request.current_user).filter(id=registration_id).first()
     if not reg:
         return JsonResponse({"success":False,"msg":"报名不存在"})
     if reg.review_status != 0:
@@ -513,6 +989,7 @@ def approve_registration(request):
     if competition.current_participants >= competition.max_participants:
         return JsonResponse({"success": False, "msg": "赛事人数已满"})
     reg.review_status = 1
+    reg.status = 'ongoing'
     reg.audit_remark = "审核通过"
     reg.save()
     competition.current_participants += 1
@@ -520,23 +997,251 @@ def approve_registration(request):
     return JsonResponse({"success":True,"msg":"审核通过"})
 
 @csrf_exempt
-@login_required
+@role_required("ORGANIZER", "PLAYER")
 def reject_registration(request):
     if request.method != "POST":
         return JsonResponse({"success":False,"msg":"仅支持POST"})
-    data = json.loads(request.body)
-    registration_id = data.get("registration_id")
-    remark = data.get("remark","")
-    reg = models.Registration.objects.filter(id=registration_id).first()
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+        remark = data.get("remark","")
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    reg = manageable_registrations(request.current_user).filter(id=registration_id).first()
     if not reg:
         return JsonResponse({"success":False,"msg":"报名不存在"})
+    if reg.review_status != 0:
+        return JsonResponse({"success": False, "msg": "该报名已审核"})
     reg.review_status = 2
+    reg.status = 'rejected'
     reg.audit_remark = remark
     reg.save()
     return JsonResponse({"success":True,"msg":"已驳回"})
 
 @csrf_exempt
-@login_required
+@role_required("ADMIN")
+def admin_force_registration(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        competition_id = data.get("competition_id")
+        username = data.get("username", "").strip()
+        register_type = data.get("register_type", "single")
+        team_name = data.get("team_name", "").strip()
+        team_members = normalize_member_names(data.get("team_members", username))
+        contact_name = data.get("contact_name", "").strip()
+        phone = data.get("phone", "").strip()
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+
+    competition = models.Competition.objects.filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
+    player = models.User.objects.filter(username=username, is_deleted=False).first()
+    if not player:
+        return JsonResponse({"success": False, "msg": "要加入的用户不存在或已被封禁"})
+    if register_type not in {"single", "team"}:
+        return JsonResponse({"success": False, "msg": "报名类型错误"})
+    if register_type == "single":
+        team_name = team_name or player.nickname or player.username
+    if register_type == "team" and not team_name:
+        return JsonResponse({"success": False, "msg": "战队报名需要填写战队名"})
+    if not team_members:
+        team_members = [player.username]
+    if player.username not in team_members:
+        team_members.insert(0, player.username)
+
+    existing_users = set(models.User.objects.filter(
+        username__in=team_members,
+        is_deleted=False
+    ).values_list("username", flat=True))
+    missing_users = [name for name in team_members if name not in existing_users]
+    if missing_users:
+        return JsonResponse({
+            "success": False,
+            "msg": f"以下选手账号不存在或已被封禁：{', '.join(missing_users)}"
+        })
+    if models.Registration.objects.filter(player=player, competition=competition).exists():
+        return JsonResponse({"success": False, "msg": "该用户已经在这个赛事中"})
+    if competition.current_participants >= competition.max_participants:
+        return JsonResponse({"success": False, "msg": "赛事人数已满"})
+
+    models.Registration.objects.create(
+        player=player,
+        competition=competition,
+        status="ongoing",
+        review_status=1,
+        register_type=register_type,
+        team_name=team_name,
+        team_members=", ".join(team_members),
+        contact_name=contact_name or player.nickname or player.username,
+        phone=phone,
+        invite_code=competition.invite_code if competition.type == "PRIVATE" else "",
+        final_score="",
+        final_rank=0,
+        earned_points=0,
+        audit_remark="管理员测试加入"
+    )
+    competition.current_participants += 1
+    competition.save(update_fields=["current_participants"])
+    return JsonResponse({"success": True, "msg": "已将用户加入赛事"})
+
+@csrf_exempt
+@role_required("ADMIN")
+def admin_delete_registration(request, registration_id):
+    if request.method != "DELETE":
+        return JsonResponse({"success": False, "msg": "仅支持DELETE"}, status=405)
+    registration = models.Registration.objects.select_related("competition").filter(
+        id=registration_id
+    ).first()
+    if not registration:
+        return JsonResponse({"success": False, "msg": "报名记录不存在"}, status=404)
+    competition = registration.competition
+    was_counted = registration.review_status == 1 and competition.current_participants > 0
+    registration.delete()
+    if was_counted:
+        competition.current_participants -= 1
+        competition.save(update_fields=["current_participants"])
+    return JsonResponse({"success": True, "msg": "报名记录已删除"})
+
+@csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
+@transaction.atomic
+def update_registration_status(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+        target_status = str(data.get("status", "")).strip()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+
+    status_map = {
+        "pending": (0, "pending", "已改为待审核"),
+        "approved": (1, "ongoing", "已改为报名通过"),
+        "rejected": (2, "rejected", "已改为驳回"),
+        "ongoing": (1, "ongoing", "已改为进行中"),
+        "finished": (1, "finished", "已改为已完赛"),
+    }
+    if target_status not in status_map:
+        return JsonResponse({"success": False, "msg": "选手状态不正确"}, status=400)
+
+    registration = manageable_registrations(request.current_user).select_for_update().filter(
+        id=registration_id
+    ).select_related("competition").first()
+    if not registration:
+        return JsonResponse({"success": False, "msg": "报名记录不存在"}, status=404)
+
+    competition = registration.competition
+    was_counted = registration.review_status == 1
+    next_review_status, next_status, remark = status_map[target_status]
+    will_count = next_review_status == 1
+
+    if not was_counted and will_count and competition.current_participants >= competition.max_participants:
+        return JsonResponse({"success": False, "msg": "赛事人数已满"})
+
+    registration.review_status = next_review_status
+    registration.status = next_status
+    registration.audit_remark = remark
+    registration.save(update_fields=["review_status", "status", "audit_remark"])
+
+    if was_counted and not will_count and competition.current_participants > 0:
+        competition.current_participants -= 1
+        competition.save(update_fields=["current_participants"])
+    elif not was_counted and will_count:
+        competition.current_participants += 1
+        competition.save(update_fields=["current_participants"])
+
+    return JsonResponse({"success": True, "msg": remark})
+
+@csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
+def update_competition_status(request, competition_id):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"})
+    try:
+        data = json.loads(request.body)
+        new_status = int(data.get("status"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+
+    if (competition.status, new_status) not in {(1, 2), (1, 3), (2, 3)}:
+        return JsonResponse({"success": False, "msg": "赛事状态不可这样修改"})
+
+    competition.status = new_status
+    competition.save()
+    if new_status == 2:
+        models.Registration.objects.filter(
+            competition=competition,
+            review_status=1
+        ).exclude(status='finished').update(status='ongoing')
+        models.Registration.objects.filter(
+            competition=competition,
+            review_status=0
+        ).update(
+            review_status=2,
+            status="rejected",
+            audit_remark="赛事已开始，未通过报名自动驳回"
+        )
+
+    return JsonResponse({"success": True, "msg": "赛事状态已更新"})
+
+@csrf_exempt
+@role_required("ORGANIZER", "PLAYER")
+@transaction.atomic
+def record_result(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        registration_id = data.get("registration_id")
+        final_score = str(data.get("final_score", "")).strip()
+        final_rank = int(data.get("final_rank", 0))
+        earned_points = int(data.get("earned_points", 0))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+
+    if final_rank <= 0 or earned_points < 0:
+        return JsonResponse({"success": False, "msg": "排名或积分设置不合法"})
+
+    registration = manageable_registrations(request.current_user).select_for_update().filter(
+        id=registration_id
+    ).select_related("player", "competition").first()
+    if not registration:
+        return JsonResponse({"success": False, "msg": "报名记录不存在"})
+    if registration.review_status != 1:
+        return JsonResponse({"success": False, "msg": "仅能为审核通过的选手录入成绩"})
+    if registration.competition.status not in {2, 3}:
+        return JsonResponse({"success": False, "msg": "赛事尚未开始"})
+    if registration.status == "finished":
+        return JsonResponse({"success": False, "msg": "该选手成绩已录入"})
+    if registration.competition.type == "PRIVATE":
+        earned_points = 0
+
+    registration.final_score = final_score
+    registration.final_rank = final_rank
+    registration.earned_points = earned_points
+    registration.status = "finished"
+    registration.save()
+
+    if earned_points > 0:
+        player = registration.player
+        player.points = (player.points or 0) + earned_points
+        player.save()
+        models.Point_history.objects.create(
+            username=player.username,
+            change_amount=earned_points,
+            reason=f"参加[{registration.competition.title}]获得第{final_rank}名"[:100]
+        )
+    return JsonResponse({"success": True, "msg": "成绩与积分已保存"})
+
+@csrf_exempt
+@role_required("ADMIN")
 def admin_users(request):
     users = models.User.objects.all()
     data = []
@@ -545,25 +1250,324 @@ def admin_users(request):
         data.append({
             "user_id": u.id,
             "username": u.username,
+            "nickname": u.nickname,
+            "email": u.email,
+            "role_code": u.role,
             "role": role_map.get(u.role, u.role),
             "is_active": not u.is_deleted,
+            "is_super_admin": is_super_admin(u),
         })
 
     return JsonResponse({"success": True,"users": data})
 
 @csrf_exempt
-@login_required
+@role_required("ADMIN")
+def admin_create_user(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        username = data.get("username", "").strip()
+        password = data.get("password", "").strip()
+        role = data.get("role", "PLAYER").strip().upper()
+        nickname = data.get("nickname", username).strip()
+        email = data.get("email", "").strip()
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if not username or not password:
+        return JsonResponse({"success": False, "msg": "用户名和密码不能为空"})
+    if role not in {"PLAYER", "ORGANIZER", "ADMIN"}:
+        return JsonResponse({"success": False, "msg": "用户角色错误"})
+    if role == "ADMIN" and not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以创建管理员账号"}, status=403)
+    if len(username) > 50 or len(nickname) > 50:
+        return JsonResponse({"success": False, "msg": "用户名或昵称过长"})
+    if models.User.objects.filter(username=username).exists():
+        return JsonResponse({"success": False, "msg": "用户名已存在"})
+    user = models.User.objects.create(
+        username=username,
+        password=hashlib.md5(password.encode()).hexdigest(),
+        role=role,
+        nickname=nickname,
+        email=email,
+        points=0,
+        created_at=datetime.now(),
+        is_deleted=False
+    )
+    return JsonResponse({"success": True, "msg": "用户创建成功", "user_id": user.id})
+
+@csrf_exempt
+@role_required("ADMIN")
+def admin_bulk_create_users(request):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以批量新增用户"}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        prefix = data.get("prefix", "player_auto_").strip()
+        count = int(data.get("count", 5))
+        role = data.get("role", "PLAYER").strip().upper()
+        password = data.get("password", "123456").strip() or "123456"
+        nickname_prefix = data.get("nickname_prefix", "测试用户").strip() or "测试用户"
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if role not in {"PLAYER", "ORGANIZER", "ADMIN"}:
+        return JsonResponse({"success": False, "msg": "用户角色错误"})
+    if not prefix or len(prefix) > 40:
+        return JsonResponse({"success": False, "msg": "账号前缀不能为空且不能过长"})
+    if count <= 0 or count > 100:
+        return JsonResponse({"success": False, "msg": "一次最多批量新增100个用户"})
+
+    created = []
+    password_hash = hashlib.md5(password.encode()).hexdigest()
+    index = 1
+    attempts = 0
+    while len(created) < count and attempts < count * 20:
+        username = f"{prefix}{index:02d}"
+        attempts += 1
+        index += 1
+        if models.User.objects.filter(username=username).exists():
+            continue
+        user = models.User.objects.create(
+            username=username,
+            password=password_hash,
+            role=role,
+            nickname=f"{nickname_prefix}{len(created) + 1}",
+            email=f"{username}@lesai.test",
+            points=0,
+            created_at=datetime.now(),
+            is_deleted=False
+        )
+        created.append({
+            "user_id": user.id,
+            "username": user.username,
+            "nickname": user.nickname,
+            "role": user.role
+        })
+
+    return JsonResponse({
+        "success": True,
+        "msg": f"已新增 {len(created)} 个用户",
+        "users": created
+    })
+
+@csrf_exempt
+@role_required("ADMIN")
+@transaction.atomic
+def admin_bulk_force_registration(request):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以批量加入比赛"}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        competition_id = data.get("competition_id")
+        user_ids = data.get("user_ids", [])
+    except (TypeError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if not isinstance(user_ids, list) or not user_ids:
+        return JsonResponse({"success": False, "msg": "请选择要加入比赛的用户"})
+
+    competition = models.Competition.objects.select_for_update().filter(id=competition_id).first()
+    if not competition:
+        return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
+
+    users = list(models.User.objects.filter(
+        id__in=user_ids,
+        is_deleted=False
+    ).exclude(role="ADMIN"))
+    if not users:
+        return JsonResponse({"success": False, "msg": "没有可加入比赛的普通用户或主办方"})
+
+    created = []
+    skipped = []
+    remaining = max(0, competition.max_participants - competition.current_participants)
+    existing_player_ids = set(models.Registration.objects.filter(
+        competition=competition,
+        player_id__in=[user.id for user in users]
+    ).values_list("player_id", flat=True))
+
+    for user in users:
+        if user.id in existing_player_ids:
+            skipped.append({"username": user.username, "reason": "已在该赛事中"})
+            continue
+        if remaining <= 0:
+            skipped.append({"username": user.username, "reason": "赛事人数已满"})
+            continue
+        registration = models.Registration.objects.create(
+            player=user,
+            competition=competition,
+            status="ongoing",
+            review_status=1,
+            register_type="single",
+            team_name=user.nickname or user.username,
+            team_members=user.username,
+            contact_name=user.nickname or user.username,
+            phone="test_admin批量加入",
+            invite_code=competition.invite_code if competition.type == "PRIVATE" else "",
+            final_score="",
+            final_rank=0,
+            earned_points=0,
+            audit_remark="test_admin批量加入"
+        )
+        created.append({
+            "registration_id": registration.id,
+            "username": user.username,
+            "team_name": registration.team_name
+        })
+        remaining -= 1
+
+    if created:
+        competition.current_participants += len(created)
+        competition.save(update_fields=["current_participants"])
+
+    return JsonResponse({
+        "success": True,
+        "msg": f"已加入 {len(created)} 个用户，跳过 {len(skipped)} 个",
+        "created": created,
+        "skipped": skipped
+    })
+
+@csrf_exempt
+@role_required("ADMIN")
+@transaction.atomic
+def admin_bulk_create_competitions(request):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以批量新增赛事"}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        count = int(data.get("count", 3))
+        max_participants = int(data.get("max_participants", 8))
+        competition_type = str(data.get("type", "PUBLIC")).upper()
+        auto_fill = bool(data.get("auto_fill", False))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if count <= 0 or count > 30:
+        return JsonResponse({"success": False, "msg": "一次最多批量新增30个赛事"})
+    if max_participants <= 1 or max_participants > 64:
+        return JsonResponse({"success": False, "msg": "每个赛事人数需在2到64之间"})
+    if competition_type not in {"PUBLIC", "PRIVATE", "MIXED"}:
+        return JsonResponse({"success": False, "msg": "赛事类型错误"})
+
+    categories = ["羽毛球", "篮球", "足球", "网球", "电竞", "棋牌桌游"]
+    locations = ["市体育馆", "大学球场", "校内体育馆", "线上", "活动中心"]
+    created = []
+    for index in range(count):
+        c_type = random.choice(["PUBLIC", "PRIVATE"]) if competition_type == "MIXED" else competition_type
+        category = random.choice(categories)
+        start_time = datetime.now() + timedelta(days=index + 1, hours=random.randint(8, 18))
+        end_time = start_time + timedelta(hours=3)
+        competition = models.Competition.objects.create(
+            title=f"测试{category}单淘汰赛{index + 1:02d}",
+            category=category,
+            location=random.choice(locations),
+            description="test_admin 批量生成的演示赛事",
+            type=c_type,
+            organizer=request.current_user,
+            status=1,
+            max_participants=max_participants,
+            current_participants=0,
+            reward_points=0 if c_type == "PRIVATE" else random.choice([50, 100, 150, 200]),
+            reward="测试赛事奖励" if c_type == "PUBLIC" else "私人赛无积分",
+            competition_format="SINGLE_ELIMINATION",
+            group_count=0,
+            start_time=start_time,
+            end_time=end_time,
+            invite_code=generate_invite_code() if c_type == "PRIVATE" else None
+        )
+        competition.competition_no = generate_competition_no(competition.id)
+        competition.save(update_fields=["competition_no"])
+        if auto_fill:
+            for _ in range(max_participants):
+                player = create_test_user(prefix="auto_player_", nickname_prefix="自动选手", role="PLAYER")
+                models.Registration.objects.create(
+                    player=player,
+                    competition=competition,
+                    status="ongoing",
+                    review_status=1,
+                    register_type="single",
+                    team_name=player.nickname or player.username,
+                    team_members=player.username,
+                    contact_name=player.nickname or player.username,
+                    phone="系统消息通知",
+                    invite_code=competition.invite_code if competition.type == "PRIVATE" else "",
+                    final_score="",
+                    final_rank=0,
+                    earned_points=0,
+                    audit_remark="test_admin随机填满"
+                )
+            competition.current_participants = max_participants
+            competition.save(update_fields=["current_participants"])
+        created.append({
+            "id": competition.id,
+            "competition_no": competition.competition_no,
+            "title": competition.title,
+            "filled": auto_fill
+        })
+    return JsonResponse({"success": True, "msg": f"已新增 {len(created)} 个赛事", "competitions": created})
+
+@csrf_exempt
+@role_required("ADMIN")
+@transaction.atomic
+def admin_bulk_delete_competitions(request):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以批量删除赛事"}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        competition_ids = data.get("competition_ids", [])
+    except (TypeError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if not isinstance(competition_ids, list) or not competition_ids:
+        return JsonResponse({"success": False, "msg": "请选择要删除的赛事"})
+    deleted_count = delete_competitions_by_ids(competition_ids)
+    return JsonResponse({"success": True, "msg": f"已删除 {deleted_count} 个赛事"})
+
+@csrf_exempt
+@role_required("ADMIN")
+@transaction.atomic
+def admin_bulk_delete_users(request):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以批量删除用户"}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        user_ids = data.get("user_ids", [])
+    except (TypeError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if not isinstance(user_ids, list) or not user_ids:
+        return JsonResponse({"success": False, "msg": "请选择要删除的用户"})
+    deleted = 0
+    for user in models.User.objects.filter(id__in=user_ids):
+        if delete_user_from_database(user, request.current_user):
+            deleted += 1
+    return JsonResponse({"success": True, "msg": f"已删除 {deleted} 个用户"})
+
+@csrf_exempt
+@role_required("ADMIN")
 def toggle_user_status(request, user_id):
     if request.method != "PUT":
         return JsonResponse({"success": False, "msg": "仅支持PUT"})
 
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
     user = models.User.objects.filter(id=user_id).first()
 
     if not user:
         return JsonResponse({"success": False, "msg": "用户不存在"})
+    if user.id == request.current_user.id:
+        return JsonResponse({"success": False, "msg": "不能封禁当前管理员账号"})
 
     is_active = data.get("is_active")
+    if not isinstance(is_active, bool):
+        return JsonResponse({"success": False, "msg": "用户状态参数错误"})
     user.is_deleted = not is_active
     user.save()
 
@@ -571,7 +1575,22 @@ def toggle_user_status(request, user_id):
     return JsonResponse({"success": True, "msg": msg})
 
 @csrf_exempt
-@login_required
+@role_required("ADMIN")
+@transaction.atomic
+def admin_delete_user(request, user_id):
+    if not is_super_admin(request.current_user):
+        return JsonResponse({"success": False, "msg": "只有 test_admin 可以彻底删除账号"}, status=403)
+    if request.method != "DELETE":
+        return JsonResponse({"success": False, "msg": "仅支持DELETE"}, status=405)
+    user = models.User.objects.select_for_update().filter(id=user_id).first()
+    if not user:
+        return JsonResponse({"success": False, "msg": "用户不存在"}, status=404)
+    if not delete_user_from_database(user, request.current_user):
+        return JsonResponse({"success": False, "msg": "不能删除当前登录账号"})
+    return JsonResponse({"success": True, "msg": "账号已从数据库删除"})
+
+@csrf_exempt
+@role_required("ADMIN")
 def audit_records(request):
     records = models.AuditRecord.objects.all().order_by("-audit_time")
     data = []
@@ -585,3 +1604,46 @@ def audit_records(request):
         })
 
     return JsonResponse({"success": True, "records": data})
+
+@login_required
+def notifications(request):
+    user = request.current_user
+    messages = []
+    for competition in models.Competition.objects.filter(organizer=user, status=4).order_by("-created_at"):
+        messages.append({
+            "id": f"competition-rejected-{competition.id}",
+            "type": "赛事审核",
+            "title": f"公开赛「{competition.title}」被驳回",
+            "content": competition.reject_reason or "赛事审核未通过，请修改后重新提交。",
+            "competition_id": competition.id,
+            "created_at": competition.created_at.strftime("%Y-%m-%d %H:%M")
+        })
+    rejected_registrations = models.Registration.objects.filter(
+        player=user,
+        review_status=2
+    ).select_related("competition").order_by("-registration_time")
+    for registration in rejected_registrations:
+        messages.append({
+            "id": f"registration-rejected-{registration.id}",
+            "type": "报名结果",
+            "title": f"参加「{registration.competition.title}」失败",
+            "content": registration.audit_remark or "你的报名未通过审核。",
+            "competition_id": registration.competition_id,
+            "created_at": registration.registration_time.strftime("%Y-%m-%d %H:%M")
+        })
+    messages.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+    return JsonResponse({"success": True, "messages": messages})
+
+@csrf_exempt
+@role_required("ADMIN")
+def admin_stats(request):
+    return JsonResponse({
+        "success": True,
+        "data": {
+            "totalUsers": models.User.objects.count(),
+            "runningEvents": models.Competition.objects.filter(status=2).count(),
+            "pendingCount": models.Competition.objects.filter(status=0).count(),
+            "rejectedCount": models.Competition.objects.filter(status=4).count(),
+        }
+    })
+

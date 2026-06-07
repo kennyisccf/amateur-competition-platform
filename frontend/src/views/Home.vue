@@ -11,7 +11,7 @@
       <div class="search-bar">
         <el-input
           v-model="searchKeyword"
-          placeholder="搜赛事、找运动项目..."
+          placeholder="搜赛事名称、项目或编号，例如 NO.00000001"
           @keyup.enter="searchEvent"
         />
 
@@ -47,7 +47,7 @@
     <!-- 赛事列表 -->
     <div class="event-section">
 
-      <div class="section-title">🔥 正在火热报名中</div>
+      <div class="section-title">🔥 赛事大厅</div>
 
       <!-- 加载 -->
       <div v-if="loading" class="loading">
@@ -79,15 +79,20 @@
             >
               {{ item.type === 'PRIVATE' ? '私人赛' : '公开赛' }}
             </span>
+            <span class="tag status-tag" :class="item.status === 2 ? 'primary' : 'green'">
+              {{ item.status === 2 ? '进行中' : '报名中' }}
+            </span>
 
             <div class="card-overlay">
+              <p class="event-no">{{ item.competition_no }}</p>
               <h3>{{ item.title }}</h3>
               <p>📍地点：{{ item.location }}</p>
+              <p>赛制：{{ formatRule(item) }}</p>
             </div>
           </div>
           <div class="card-footer">
             <div>已报名：{{ item.current_participants }}/{{ item.max_participants }}</div>
-            <div>奖励积分：{{ item.reward_points }}</div>
+            <div>{{ item.type === 'PRIVATE' ? '私人赛无积分' : `奖励积分：${item.reward_points}` }}</div>
           </div>
 
         </div>
@@ -102,8 +107,8 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 const router = useRouter()
 
@@ -119,14 +124,18 @@ const goToDetail = (id) => {
   router.push(`/event-detail/${id}`)
 }
 
+const formatRule = (item) => {
+  return item.competition_format_text || '单淘汰'
+}
+
 const getCompetitionData = async () => {
 
   loading.value = true
 
   try {
 
-    const res = await axios.get(
-      'http://localhost:8000/api/competitions/',
+    const res = await request.get(
+      '/api/competitions/',
       {
         params: {
           keyword: searchKeyword.value,
@@ -272,10 +281,14 @@ onMounted(() => {
   margin-right: 8px;
 }
 .type-tag {
-  position: relative;
+  left: 92px;
 }
 .category-tag{
-  position: relative;
+  left: 12px;
+}
+.status-tag {
+  left: auto;
+  right: 12px;
 }
 .green {
   background: #52c41a;
@@ -285,6 +298,9 @@ onMounted(() => {
 }
 .blue {
   background: #1677ff;
+}
+.primary {
+  background: #1d4ed8;
 }
 
 .purple {
@@ -318,6 +334,11 @@ onMounted(() => {
   margin: 0 0 8px;
 
   font-size: 22px;
+}
+.event-no {
+  font-size: 13px;
+  opacity: 0.9;
+  margin: 0 0 4px;
 }
 
 .card-footer {

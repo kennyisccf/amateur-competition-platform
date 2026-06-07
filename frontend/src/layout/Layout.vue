@@ -1,5 +1,5 @@
 <template>
-  <el-container style="height: 100vh">
+  <el-container class="app-shell">
     <!-- 左侧导航栏 -->
     <el-aside width="200px" class="sidebar">
       <!-- 顶部品牌 -->
@@ -26,12 +26,16 @@
             <el-icon><User /></el-icon>
             <span>我的运动档案</span>
           </el-menu-item>
+          <el-menu-item index="/notifications">
+            <el-icon><Bell /></el-icon>
+            <span>消息通知</span>
+          </el-menu-item>
         </el-menu>
       </div>
 
-      <!-- 主办方专区：仅主办方/管理员可见 -->
-      <div class="menu-group" v-if="userRole === 'ORGANIZER'">
-        <div class="menu-title">主办方专区</div>
+      <!-- 赛事管理：参赛者可管理私人赛事，管理员拥有全部赛事权限 -->
+      <div class="menu-group" v-if="['PLAYER', 'ORGANIZER', 'ADMIN'].includes(userRole)">
+        <div class="menu-title">赛事创建与管理</div>
         <el-menu
           background-color="#1677ff"
           text-color="#fff"
@@ -40,7 +44,7 @@
         >
           <el-menu-item index="/create">
             <el-icon><Plus /></el-icon>
-            <span>发起全新赛事</span>
+            <span>{{ userRole === 'PLAYER' ? '发起私人赛事' : '发起全新赛事' }}</span>
           </el-menu-item>
           <el-menu-item index="/workbench">
             <el-icon><Tools /></el-icon>
@@ -74,8 +78,8 @@
     </el-aside>
 
     <!-- 右侧内容区 -->
-    <el-container>
-      <el-main style="padding: 0; background: #f5f7fa">
+    <el-container class="content-shell">
+      <el-main class="content-main">
         <router-view />
       </el-main>
     </el-container>
@@ -84,9 +88,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Trophy, User, Plus, Tools, List, Setting, SwitchButton} from '@element-plus/icons-vue'
+import { Bell, Trophy, User, Plus, Tools, List, Setting } from '@element-plus/icons-vue'
 const userRole = ref('')
-import axios from 'axios'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 
@@ -108,16 +112,12 @@ const handleLogout = () => {
   )
   .then(async () => {
     try {
-      const res = await axios.post(
-        'http://localhost:8000/api/logout/',
-        {},
-        {
-          withCredentials: true
-        }
-      )
+      const res = await request.post('/api/logout/', {})
       if (res.data.success) {
         localStorage.removeItem('user_id')
         localStorage.removeItem('role')
+        localStorage.removeItem('username')
+        localStorage.removeItem('is_super_admin')
         localStorage.removeItem('token')
         ElMessage.success('已退出登录')
         router.replace('/login')
@@ -167,5 +167,30 @@ const handleLogout = () => {
 .sidebar {
   background: #1677ff;
   position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+.app-shell {
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+.content-shell {
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+.content-main {
+  padding: 0;
+  background: #f5f7fa;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  scrollbar-width: none;
+}
+.content-main::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 </style>
