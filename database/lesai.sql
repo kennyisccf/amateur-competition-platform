@@ -34,6 +34,7 @@ CREATE TABLE `user` (
 DROP TABLE IF EXISTS `competition`;
 CREATE TABLE `competition` (
   `id` bigint NOT NULL AUTO_INCREMENT,
+  `competition_no` varchar(20) DEFAULT NULL,
   `title` varchar(100) NOT NULL,
   `category` varchar(50) NOT NULL,
   `location` varchar(100) NOT NULL,
@@ -45,12 +46,16 @@ CREATE TABLE `competition` (
   `current_participants` int DEFAULT 0,
   `reward_points` int DEFAULT 100,
   `reward` text DEFAULT NULL,
+  `competition_format` varchar(30) DEFAULT 'SINGLE_ELIMINATION',
+  `group_count` int DEFAULT 0,
   `start_time` datetime NOT NULL,
   `end_time` datetime NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `invite_code` varchar(50) DEFAULT NULL,
   `reject_reason` varchar(255) DEFAULT NULL,
+  `bracket_state` text DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_competition_no` (`competition_no`),
   KEY `fk_organizer_idx` (`organizer_id`),
   CONSTRAINT `fk_organizer` FOREIGN KEY (`organizer_id`) REFERENCES `user` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -63,14 +68,20 @@ CREATE TABLE `registration` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `player_id` bigint NOT NULL,
   `competition_id` bigint NOT NULL,
-  `status` varchar(20) DEFAULT '' COMMENT 'pending ongoing finished ',
+  `status` varchar(20) DEFAULT '' COMMENT 'pending ongoing finished rejected',
   `review_status` int DEFAULT 0 COMMENT '0未审核 1通过 2未通过',
+  `register_type` varchar(20) DEFAULT 'single',
+  `team_name` varchar(100) DEFAULT '',
+  `team_members` text DEFAULT NULL,
+  `contact_name` varchar(50) DEFAULT '',
+  `phone` varchar(50) DEFAULT '',
   `final_score` varchar(50) NOT NULL DEFAULT '',
   `final_rank` int DEFAULT 0,
   `earned_points` int DEFAULT 0,
   `audit_remark` varchar(255) DEFAULT NULL,
   `registration_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `invite_code` varchar(50) DEFAULT NULL,
+  `show_in_profile` tinyint(1) DEFAULT 1,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_player_comp` (`player_id`,`competition_id`),
   KEY `fk_reg_comp_idx` (`competition_id`),
@@ -88,8 +99,7 @@ CREATE TABLE `point_history` (
   `change_amount` int DEFAULT 0,
   `reason` varchar(100) NOT NULL,
   `time` datetime DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_time` (`username`, `time`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
@@ -130,20 +140,25 @@ INSERT INTO `user` (`id`, `username`, `password`, `role`, `nickname`, `email`, `
 (2, 'org_zs', 'e10adc3949ba59abbe56e057f20f883e', 'ORGANIZER', '张主办', 'zhang@club.com', 0),
 (3, 'player_mike', 'e10adc3949ba59abbe56e057f20f883e', 'PLAYER', '迈克', 'mike@test.com', 1500),
 (4, 'player_jane', 'e10adc3949ba59abbe56e057f20f883e', 'PLAYER', '简', 'jane@test.com', 500),
-(5, 'player_test', 'e10adc3949ba59abbe56e057f20f883e', 'PLAYER', '测试员', 'test@test.com', 0);
+(5, 'player_test', 'e10adc3949ba59abbe56e057f20f883e', 'PLAYER', '测试员', 'test@test.com', 0),
+(6, 'test_admin', 'e10adc3949ba59abbe56e057f20f883e', 'ADMIN', '全功能测试账号', 'test_admin@lesai.com', 9999);
 
 -- 赛事数据 (覆盖全状态: 0待审, 1报名, 2进行, 3结束, 4驳回)
-INSERT INTO `competition` (`id`, `title`, `category`, `location`, `type`, `organizer_id`, `status`, `start_time`, `end_time`) VALUES 
-(1, '正在招募的羽毛球赛', '羽毛球', '市体育馆', 'PUBLIC', 2, 1, '2026-06-10 09:00:00', '2026-06-10 18:00:00'),
-(2, '待审核的篮球赛', '篮球', '大学球场', 'PUBLIC', 2, 0, '2026-07-01 10:00:00', '2026-07-02 18:00:00'),
-(3, '已结束的电竞周赛', '电竞', '线上', 'PUBLIC', 2, 3, '2026-05-01 20:00:00', '2026-05-01 23:00:00'),
-(4, '被驳回的棋牌聚会', '棋牌', '茶室', 'PRIVATE', 2, 4, '2026-08-01 14:00:00', '2026-08-01 18:00:00');
+INSERT INTO `competition`
+(`id`, `competition_no`, `title`, `category`, `location`, `description`, `type`, `organizer_id`, `status`, `max_participants`, `current_participants`, `reward_points`, `reward`, `competition_format`, `group_count`, `start_time`, `end_time`, `invite_code`, `reject_reason`) VALUES
+(1, 'NO.00000001', '正在招募的羽毛球赛', '羽毛球', '市体育馆', '面向校园羽毛球爱好者的公开招募赛事', 'PUBLIC', 2, 1, 32, 0, 100, '冠军奖牌与100积分', 'SINGLE_ELIMINATION', 0, '2026-06-10 09:00:00', '2026-06-10 18:00:00', NULL, NULL),
+(2, 'NO.00000002', '待审核的篮球赛', '篮球', '大学球场', '等待平台管理员审核的篮球赛事', 'PUBLIC', 2, 0, 16, 0, 100, '冠军奖杯', 'SINGLE_ELIMINATION', 0, '2026-07-01 10:00:00', '2026-07-02 18:00:00', NULL, NULL),
+(3, 'NO.00000003', '已结束的电竞周赛', '电竞', '线上', '用于演示历史成绩与积分记录的已结束赛事', 'PUBLIC', 2, 3, 16, 1, 200, '冠军200积分', 'SINGLE_ELIMINATION', 0, '2026-05-01 20:00:00', '2026-05-01 23:00:00', NULL, NULL),
+(4, 'NO.00000004', '被驳回的棋牌聚会', '棋牌桌游', '茶室', '用于演示赛事审核驳回状态', 'PUBLIC', 2, 4, 20, 0, 50, '参与纪念品', 'SINGLE_ELIMINATION', 0, '2026-08-01 14:00:00', '2026-08-01 18:00:00', NULL, '赛事描述过于简单'),
+(5, 'NO.00000005', '校内私人羽毛球友谊赛', '羽毛球', '校内体育馆', '需要邀请码报名的校内私人赛事', 'PRIVATE', 2, 1, 8, 0, 0, '私人友谊赛无积分', 'SINGLE_ELIMINATION', 0, '2026-06-15 14:00:00', '2026-06-15 18:00:00', 'LESAI6', NULL),
+(6, 'NO.00000006', '正在进行的足球赛', '足球', '大学足球场', '用于演示开赛后录入成绩与结束赛事', 'PUBLIC', 2, 2, 22, 1, 150, '冠军150积分', 'SINGLE_ELIMINATION', 0, '2026-06-04 09:00:00', '2026-06-05 18:00:00', NULL, NULL);
 
--- 报名数据 (包含成功与待定)
-INSERT INTO `registration` (`player_id`, `competition_id`, `status`, `final_score`, `final_rank`, `earned_points`) VALUES 
-(3, 1, 1, '', 0, 0), -- 迈克成功报名羽毛球赛
-(4, 1, 0, '', 0, 0), -- 简正在申请羽毛球赛
-(3, 3, 1, '100', 1, 200); -- 迈克参加过电竞赛并拿了第一名
+-- 报名数据 (招募中的羽毛球赛不预置报名，避免无人报名时显示示例选手)
+INSERT INTO `registration`
+(`player_id`, `competition_id`, `status`, `review_status`, `register_type`, `team_name`, `team_members`, `contact_name`, `phone`, `final_score`, `final_rank`, `earned_points`, `invite_code`, `show_in_profile`) VALUES
+(3, 3, 'finished', 1, 'team', '迈克战队', 'player_mike, player_jane', '迈克', '13800000001', '100', 1, 200, NULL, 1), -- 迈克参加过电竞赛并拿了第一名
+(5, 5, 'pending', 0, 'single', '测试员', 'player_test', '测试员', '13800000003', '', 0, 0, 'LESAI6', 1), -- 私人赛事报名
+(4, 6, 'ongoing', 1, 'single', '简', 'player_jane', '简', '13800000002', '', 0, 0, NULL, 1); -- 可用于演示录入成绩
 
 -- 积分流水 (对应迈克的加分)
 INSERT INTO `point_history` (`username`, `change_amount`, `reason`) VALUES 

@@ -34,9 +34,22 @@
       </div>
 
       <div class="form-row">
-        <div class="form-item">
+        <div class="form-item" v-if="form.type !== 'PRIVATE'">
           <label>奖励积分</label>
           <el-input v-model="form.reward_points" type="number" placeholder="请输入" />
+        </div>
+        <div class="form-item" v-else>
+          <label>奖励积分</label>
+          <el-input value="私人赛事不设置积分" disabled />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-item">
+          <label>赛制规则</label>
+          <el-select v-model="form.competition_format" placeholder="请选择赛制" disabled>
+            <el-option label="单淘汰" value="SINGLE_ELIMINATION" />
+          </el-select>
         </div>
       </div>
 
@@ -57,10 +70,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,10 +82,8 @@ const form = ref({})
 
 // 获取请求头
 const getHeaders = async () => {
-  const token = localStorage.getItem('token')
-  const csrfRes = await axios.get('http://localhost:8000/csrf/')
+  const csrfRes = await request.get('/csrf/')
   return {
-    'Authorization': `Bearer ${token}`,
     'X-CSRFToken': csrfRes.data.csrfToken
   }
 }
@@ -82,14 +93,17 @@ const loadCompetition = async () => {
   const id = route.params.id
   try {
     const headers = await getHeaders()
-    const res = await axios.get(`http://localhost:8000/api/competition/${id}/`, { headers })
+    const res = await request.get(`/api/competition/${id}/`, { headers })
     if (res.data.success) {
       form.value = {
         title: res.data.data.title,
         category: res.data.data.category,
+        type: res.data.data.type,
         location: res.data.data.location,
         max_participants: res.data.data.max_participants,
         reward_points: res.data.data.reward_points,
+        competition_format: 'SINGLE_ELIMINATION',
+        group_count: 0,
         reward: res.data.data.reward,
         description: res.data.data.description
       }
@@ -108,17 +122,23 @@ const handleUpdate = async () => {
     ElMessage.warning('请填写赛事名称')
     return
   }
+  if (form.value.competition_format === 'GROUP_KNOCKOUT' && !form.value.group_count) {
+    ElMessage.warning('请填写分组数')
+    return
+  }
 
   try {
     const headers = await getHeaders()
-    const res = await axios.put(
-      `http://localhost:8000/api/competitions/${id}/update/`,
+    const res = await request.put(
+      `/api/competitions/${id}/update/`,
       form.value,
       { headers }
     )
     if (res.data.success) {
       ElMessage.success('修改成功')
       router.push('/workbench')
+    } else {
+      ElMessage.error(res.data.msg || '修改失败')
     }
   } catch (err) {
     ElMessage.error('修改失败')
@@ -128,6 +148,15 @@ const handleUpdate = async () => {
 onMounted(() => {
   loadCompetition()
 })
+
+watch(
+  () => form.value.competition_format,
+  (format) => {
+    if (format && format !== 'GROUP_KNOCKOUT') {
+      form.value.group_count = 0
+    }
+  }
+)
 </script>
 
 <style scoped>

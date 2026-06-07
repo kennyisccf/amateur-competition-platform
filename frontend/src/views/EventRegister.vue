@@ -13,29 +13,55 @@
         <div class="form-item">
           <label>报名身份</label>
           <el-select v-model="form.registerType" placeholder="请选择">
-            <el-option label="作为战队队长发起报名" value="team" />
             <el-option label="个人报名" value="single" />
+            <el-option label="作为战队队长发起报名" value="team" />
           </el-select>
         </div>
 
         <div class="form-item">
-          <label>战队/选手名称</label>
-          <el-input v-model="form.teamName" placeholder="请填写全称" />
+          <label>{{ form.registerType === 'team' ? '战队名' : '队伍/显示名称' }}</label>
+          <el-input v-model="form.teamName" :placeholder="form.registerType === 'team' ? '例如：乐赛羽毛球队' : '可不填，默认使用昵称'" />
+        </div>
+
+        <div class="form-item">
+          <label>选手账号</label>
+          <div class="member-row" v-for="(member, index) in form.memberNames" :key="index">
+            <el-input
+              v-model="form.memberNames[index]"
+              placeholder="请输入已有账号用户名，例如 player_mike"
+            />
+            <el-button
+              v-if="form.registerType === 'team'"
+              type="primary"
+              plain
+              @click="addMember"
+            >
+              +
+            </el-button>
+            <el-button
+              v-if="form.registerType === 'team' && form.memberNames.length > 1"
+              type="danger"
+              plain
+              @click="removeMember(index)"
+            >
+              -
+            </el-button>
+          </div>
         </div>
 
         <div class="form-item">
           <label>队长/联系人</label>
-          <el-input v-model="form.contactName" placeholder="请填写联系人姓名" />
+          <el-input v-model="form.contactName" placeholder="可不填，默认使用账号昵称" />
         </div>
 
         <div class="form-item">
           <label>联系方式(手机/微信)</label>
-          <el-input v-model="form.phone" placeholder="用于接收赛事通知" />
+          <el-input v-model="form.phone" placeholder="可不填，报名结果可在消息通知查看" />
         </div>
 
-        <div class="form-item">
+        <div class="form-item" v-if="competitionData.type === 'PRIVATE'">
           <label>私人赛事邀请码</label>
-          <el-input v-model="form.inviteCode" placeholder="私人赛事请填写，公开赛事留空" />
+          <el-input v-model="form.inviteCode" placeholder="请输入私人赛事邀请码" />
         </div>
 
         <div class="progress-info">
@@ -55,8 +81,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,21 +90,31 @@ const router = useRouter()
 const loading = ref(true)
 const competitionData = ref({})
 const form = ref({
-  registerType: 'team',
+  registerType: 'single',
   teamName: '',
+  memberNames: [''],
   contactName: '',
   phone: '',
   inviteCode: ''
 })
+const currentUsername = ref('')
 
 // 加载赛事信息
 const loadCompetitionDetail = async () => {
   const competitionId = route.params.id || 1
   try {
-    const res = await axios.get(`http://localhost:8000/api/competition/${competitionId}/`)
+    const res = await request.get(`/api/competition/${competitionId}/`)
     if (res.data.success) {
       competitionData.value = res.data.data
       loading.value = false
+    }
+    const userRes = await request.get('/api/user/')
+    if (userRes.data.success) {
+      currentUsername.value = userRes.data.data.username
+      if (!form.value.memberNames[0]) {
+        form.value.memberNames = [userRes.data.data.username]
+      }
+      form.value.contactName = userRes.data.data.nickname || userRes.data.data.username
     }
   } catch (err) {
     ElMessage.error('加载赛事信息失败')
@@ -88,8 +124,26 @@ const loadCompetitionDetail = async () => {
 
 // 提交报名，适配新接口地址
 const handleSubmitRegister = async () => {
-  if (!form.value.teamName || !form.value.phone) {
-    ElMessage.warning('请填写完整报名信息')
+  if (form.value.registerType === 'team' && !form.value.teamName) {
+    ElMessage.warning(form.value.registerType === 'team' ? '请填写战队名' : '请填写队伍/显示名称')
+    return
+  }
+  const memberNames = form.value.memberNames
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  const submittedMemberNames = form.value.registerType === 'single'
+    ? memberNames.slice(0, 1)
+    : memberNames
+  if (!submittedMemberNames.length) {
+    ElMessage.warning('请填写参赛选手账号')
+    return
+  }
+  if (currentUsername.value && !submittedMemberNames.includes(currentUsername.value)) {
+    ElMessage.warning('选手账号列表必须包含当前登录账号')
+    return
+  }
+  if (competitionData.value.type === 'PRIVATE' && !form.value.inviteCode) {
+    ElMessage.warning('私人赛事需要填写邀请码')
     return
   }
 
@@ -102,23 +156,26 @@ const handleSubmitRegister = async () => {
 
   try {
     // 1. 获取CSRF Token
-    const csrfRes = await axios.get('http://localhost:8000/csrf/')
+    const csrfRes = await request.get('/csrf/')
     const csrfToken = csrfRes.data.csrfToken
 
     // 2. 调用新的报名接口
-    const res = await axios.post(
-      'http://localhost:8000/api/register_competition/',
+    const res = await request.post(
+      '/api/register_competition/',
       {
-        player_id: parseInt(userId),
         competition_id: competitionData.value.id,
-        invite_code: form.value.inviteCode || null
+        invite_code: competitionData.value.type === 'PRIVATE' ? form.value.inviteCode : '',
+        register_type: form.value.registerType,
+        team_name: form.value.teamName,
+        team_members: submittedMemberNames.join(', '),
+        contact_name: form.value.contactName,
+        phone: form.value.phone
       },
       {
         headers: {
           'X-CSRFToken': csrfToken,
           'Content-Type': 'application/json',
-        },
-        withCredentials: true
+        }
       }
     )
     if (res.data.success) {
@@ -130,6 +187,17 @@ const handleSubmitRegister = async () => {
   } catch (err) {
     ElMessage.error('报名请求失败，请检查后端服务')
     console.error(err)
+  }
+}
+
+const addMember = () => {
+  form.value.memberNames.push('')
+}
+
+const removeMember = (index) => {
+  form.value.memberNames.splice(index, 1)
+  if (!form.value.memberNames.length) {
+    form.value.memberNames.push('')
   }
 }
 
@@ -180,6 +248,12 @@ onMounted(() => {
   margin-bottom: 8px;
   font-weight: 500;
   color: #333;
+}
+.member-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .progress-info {
   margin-top: 16px;

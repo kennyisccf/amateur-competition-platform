@@ -29,18 +29,25 @@
         <div class="captcha-row">
           <el-input
             v-model="form.captcha"
-            placeholder="图形验证码"
-            style="flex: 1; margin-right: 12px"
+            placeholder="请输入验证码"
+            maxlength="4"
+            clearable
           />
-          <div class="captcha-code">8A3F</div>
+          <button
+            class="captcha-code"
+            type="button"
+            title="点击刷新验证码"
+            :disabled="captchaLoading"
+            @click="loadCaptcha"
+          >
+            {{ captchaLoading ? '刷新中' : captchaCode }}
+          </button>
         </div>
-
         <el-button type="primary" style="width: 100%; margin-top: 24px" native-type="submit">
           立即登录
         </el-button>
 
         <div class="form-footer">
-          <a href="#">忘记密码?</a>
           <span>还没有账户? <router-link to="/register">立即注册</router-link></span>
         </div>
       </form>
@@ -49,29 +56,42 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 const router = useRouter()
 
-// 角色列表，对应接口要求的中文role
-const roleList = [
-  { label: '参赛选手', value: '选手' },
-  { label: '赛事主办方', value: '主办方' },
-  { label: '平台管理员', value: '管理员' }
-]
-const selectedRole = ref('选手')
-
 const form = ref({
   username: '',
   password: '',
+  captcha: '',
 })
+const captchaCode = ref('')
+const captchaLoading = ref(false)
+
+const loadCaptcha = async () => {
+  captchaLoading.value = true
+  try {
+    const res = await request.get('/api/login-captcha/')
+    captchaCode.value = res.data.captcha || ''
+    form.value.captcha = ''
+  } catch (err) {
+    captchaCode.value = '重试'
+    console.error(err)
+  } finally {
+    captchaLoading.value = false
+  }
+}
 
 const handleLogin = async () => {
-  if (!form.value.username || !form.value.password) {
-    ElMessage.warning('请输入用户名和密码')
+  if (!form.value.username) {
+    ElMessage.warning('请输入用户名')
+    return
+  }
+  const isTryingAutoLogin = !form.value.password && !form.value.captcha
+  if (!isTryingAutoLogin && (!form.value.password || !form.value.captcha)) {
+    ElMessage.warning('普通账号请输入密码和验证码；批量测试账号可只填用户名')
     return
   }
   try {
@@ -82,6 +102,7 @@ const handleLogin = async () => {
       {
         username: form.value.username,
         password: form.value.password,
+        captcha: form.value.captcha,
       },
       {
         headers: {
@@ -93,8 +114,9 @@ const handleLogin = async () => {
       ElMessage.success('登录成功')
       // 保存用户ID、Token、角色，用于后续鉴权和菜单权限
       localStorage.setItem('user_id', res.data.user_id)
-      localStorage.setItem('token', res.data.token)
+      localStorage.setItem('username', res.data.username)
       localStorage.setItem('role', res.data.role)
+      localStorage.setItem('is_super_admin', res.data.is_super_admin ? '1' : '0')
       
       router.push('/home')
       // if (res.data.role === 'PLAYER') {
@@ -106,13 +128,17 @@ const handleLogin = async () => {
       // }
     } else {
       ElMessage.error(res.data.msg || '登录失败')
+      loadCaptcha()
     }
   }
   catch (err) {
     console.error(err)
-    ElMessage.error('请求失败，请检查后端服务')
+    ElMessage.error(err.response?.data?.msg || '请求失败，请检查后端服务')
+    loadCaptcha()
   }
 }
+
+onMounted(loadCaptcha)
 </script>
 
 <style scoped>
@@ -181,20 +207,29 @@ const handleLogin = async () => {
   color: white;
 }
 .captcha-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  gap: 12px;
+  align-items: stretch;
 }
 .captcha-code {
-  padding: 10px 16px;
-  background: #e5e7eb;
+  min-height: 40px;
+  border: 1px solid #dcdfe6;
   border-radius: 6px;
-  font-weight: bold;
-  letter-spacing: 2px;
+  background: #f2f5f9;
+  color: #1e3c72;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.captcha-code:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .form-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 16px;
   font-size: 13px;
 }
