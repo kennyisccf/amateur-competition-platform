@@ -35,6 +35,15 @@
         用户表批量加入
       </el-button>
       <el-button
+        v-if="canManageSelected"
+        type="info"
+        plain
+        :disabled="!selectedCompetitionId || approvedRegistrations.length === 0"
+        @click="openSeedDialog"
+      >
+        设置种子选手
+      </el-button>
+      <el-button
         v-if="canManageSelected && selectedCompetition?.status === 1"
         type="success"
         @click="handleCompetitionStatusChange(2)"
@@ -284,6 +293,7 @@
     >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="user_id" label="ID" width="80" />
+      <el-table-column prop="user_code" label="编号" width="110" />
       <el-table-column prop="username" label="用户名" min-width="140" />
       <el-table-column prop="nickname" label="昵称" min-width="140" />
       <el-table-column prop="role" label="角色" width="120" />
@@ -302,6 +312,43 @@
       </el-button>
     </template>
   </el-dialog>
+  <el-dialog v-model="seedDialogVisible" title="设置种子选手" width="560px">
+    <div class="dialog-tip">
+      种子选手表示首轮保送。系统只会在人数不规则、存在保送位时按积分推荐；你也可以手动指定，最多 {{ recommendedSeedLimit }} 位。
+    </div>
+    <el-radio-group v-model="selectedSeedMode" class="seed-mode">
+      <el-radio-button label="AUTO">系统自动推荐</el-radio-button>
+      <el-radio-button label="MANUAL">手动设置</el-radio-button>
+    </el-radio-group>
+    <el-select
+      v-model="selectedSeedIds"
+      multiple
+      filterable
+      collapse-tags
+      collapse-tags-tooltip
+      placeholder="选择已通过报名的选手或战队"
+      style="width: 100%;"
+      :disabled="selectedSeedMode === 'AUTO' || recommendedSeedLimit === 0"
+    >
+      <el-option
+        v-for="row in approvedRegistrations"
+        :key="row.registration_id"
+      :label="seedOptionLabel(row)"
+      :value="String(row.registration_id)"
+    />
+  </el-select>
+    <div v-if="selectedSeedMode === 'MANUAL' && recommendedSeedLimit === 0" class="seed-preview">
+      当前人数刚好进入标准单淘汰赛，没有首轮保送位，因此不设置种子。
+    </div>
+    <div v-if="selectedSeedMode === 'AUTO'" class="seed-preview">
+      自动推荐：{{ autoSeedPreview || '当前没有保送位，暂不设置种子' }}
+    </div>
+    <template #footer>
+      <el-button @click="seedDialogVisible = false">取消</el-button>
+      <el-button type="warning" plain @click="clearSeedSettings">手动清空种子</el-button>
+      <el-button type="primary" @click="saveSeedSettings">保存设置</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -318,7 +365,7 @@ const selectedCompetitionId = ref('')
 const registrations = ref([])
 const userRole = localStorage.getItem('role') || ''
 const isSuperAdmin = ref(localStorage.getItem('is_super_admin') === '1')
-const bracketState = ref({ drawSeed: Date.now(), winners: {} })
+const bracketState = ref({ drawSeed: Date.now(), winners: {}, seedIds: [], seedMode: 'AUTO' })
 const userList = ref([])
 const bulkSelectedUserIds = ref([])
 
@@ -329,6 +376,9 @@ const resultRegistration = ref({})
 const forceDialogVisible = ref(false)
 const bulkCreateDialogVisible = ref(false)
 const bulkJoinDialogVisible = ref(false)
+const seedDialogVisible = ref(false)
+const selectedSeedIds = ref([])
+const selectedSeedMode = ref('AUTO')
 const forceForm = ref({
   username: '',
   register_type: 'single',
@@ -352,6 +402,40 @@ const selectedCompetition = computed(() =>
   myCompetitions.value.find(item => item.id === selectedCompetitionId.value)
 )
 const canManageSelected = computed(() => Boolean(selectedCompetition.value?.can_manage))
+const approvedRegistrations = computed(() =>
+  registrations.value.filter(item => item.review_status === 1)
+)
+const floorPowerOfTwo = (value) => {
+  let size = 1
+  while (size * 2 <= value) size *= 2
+  return size
+}
+const getSeedLimit = (playerCount) => {
+  if (playerCount < 4) return 0
+  const mainSize = floorPowerOfTwo(playerCount)
+  const prelimMatchCount = playerCount - mainSize
+  if (prelimMatchCount <= 0) return 0
+  const prelimPlayerCount = prelimMatchCount * 2
+  const byeCount = playerCount - prelimPlayerCount
+  return Math.min(byeCount, prelimMatchCount, 4, Math.ceil(playerCount / 4))
+}
+const recommendedSeedLimit = computed(() => getSeedLimit(approvedRegistrations.value.length))
+const recommendedSeedIds = computed(() => {
+  const seedCount = recommendedSeedLimit.value
+  if (!seedCount) return []
+  return approvedRegistrations.value
+    .slice()
+    .sort((a, b) => Number(b.player_points || 0) - Number(a.player_points || 0) || String(a.username).localeCompare(String(b.username)))
+    .slice(0, seedCount)
+    .map(item => String(item.registration_id))
+})
+const autoSeedPreview = computed(() =>
+  recommendedSeedIds.value
+    .map(id => approvedRegistrations.value.find(item => String(item.registration_id) === id))
+    .filter(Boolean)
+    .map((item, index) => `S${index + 1} ${item.team_name || item.nickname || item.username}`)
+    .join('，')
+)
 const joinableUsers = computed(() =>
   userList.value.filter(item => item.is_active && item.role_code !== 'ADMIN')
 )
@@ -463,14 +547,14 @@ const fetchMyCompetitions = async () => {
 const fetchRegistrations = async () => {
   if (!selectedCompetitionId.value) return
   registrations.value = []
-  bracketState.value = { drawSeed: Date.now(), winners: {} }
+  bracketState.value = { drawSeed: Date.now(), winners: {}, seedIds: [], seedMode: 'AUTO' }
   loading.value = true
   try {
     const headers = await getHeaders()
     const res = await request.get(`/api/competitions/${selectedCompetitionId.value}/registrations/`, { headers })
     if (res.data.success) {
       registrations.value = res.data.registrations
-      bracketState.value = res.data.bracket_state || { drawSeed: Date.now(), winners: {} }
+      bracketState.value = res.data.bracket_state || { drawSeed: Date.now(), winners: {}, seedIds: [], seedMode: 'AUTO' }
     }
   } catch (err) {
     ElMessage.error('网络请求失败')
@@ -640,6 +724,39 @@ const openBulkJoinDialog = async () => {
   await fetchUsers()
   bulkSelectedUserIds.value = []
   bulkJoinDialogVisible.value = true
+}
+const seedOptionLabel = (row) => {
+  const name = row.team_name || row.nickname || row.username
+  return `${name} / ${row.username} / ${Number(row.player_points || 0)}分`
+}
+const openSeedDialog = () => {
+  selectedSeedMode.value = bracketState.value?.seedMode === 'MANUAL' ? 'MANUAL' : 'AUTO'
+  selectedSeedIds.value = Array.isArray(bracketState.value?.seedIds)
+    ? bracketState.value.seedIds.map(String).slice(0, recommendedSeedLimit.value)
+    : recommendedSeedIds.value
+  seedDialogVisible.value = true
+}
+const saveSeedSettings = async () => {
+  const validIds = new Set(approvedRegistrations.value.map(item => String(item.registration_id)))
+  const seedIds = selectedSeedMode.value === 'MANUAL'
+    ? selectedSeedIds.value
+        .map(String)
+        .filter((id, index, arr) => validIds.has(id) && arr.indexOf(id) === index)
+        .slice(0, recommendedSeedLimit.value)
+    : []
+  seedDialogVisible.value = false
+  await saveBracketState({
+    ...bracketState.value,
+    seedIds,
+    seedMode: selectedSeedMode.value,
+    winners: {}
+  })
+  ElMessage.success(selectedSeedMode.value === 'AUTO' ? '已恢复系统自动推荐保送种子，抽签树已重置' : (seedIds.length ? '保送种子已更新，抽签树已重置' : '已手动清空保送种子'))
+}
+const clearSeedSettings = async () => {
+  selectedSeedMode.value = 'MANUAL'
+  selectedSeedIds.value = []
+  await saveSeedSettings()
 }
 const handleBulkUserSelectionChange = (selection) => {
   bulkSelectedUserIds.value = selection.map(item => item.user_id)
@@ -833,6 +950,14 @@ onMounted(async () => {
   background: #f6f9fd;
   border: 1px solid #e5edf7;
   border-radius: 8px;
+  font-size: 13px;
+}
+.seed-mode {
+  margin-bottom: 14px;
+}
+.seed-preview {
+  margin-top: 10px;
+  color: #5f6f86;
   font-size: 13px;
 }
 .status-tag {

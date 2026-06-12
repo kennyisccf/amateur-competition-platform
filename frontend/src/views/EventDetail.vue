@@ -3,6 +3,9 @@
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else class="detail-content">
       <div class="detail-card">
+        <div v-if="competitionData.thumbnail_url" class="detail-cover">
+          <img :src="competitionData.thumbnail_url" alt="赛事缩图" />
+        </div>
         <div class="category-tag">
           <span>{{ competitionData.category }}</span>
           <span>{{ competitionData.type === 'PRIVATE' ? '私人赛' : '公开赛' }}</span>
@@ -169,6 +172,20 @@ onMounted(() => {
   padding: 24px;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+.detail-cover {
+  width: 100%;
+  height: clamp(150px, 17vw, 230px);
+  margin: 0 0 18px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f3f7fb;
+}
+.detail-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
 }
 .category-tag {
   margin-bottom: 12px;

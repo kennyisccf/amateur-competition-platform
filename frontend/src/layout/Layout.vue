@@ -30,6 +30,10 @@
             <el-icon><Bell /></el-icon>
             <span>消息通知</span>
           </el-menu-item>
+          <el-menu-item index="/friends">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>好友系统</span>
+          </el-menu-item>
         </el-menu>
       </div>
 
@@ -88,7 +92,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Bell, Trophy, User, Plus, Tools, List, Setting } from '@element-plus/icons-vue'
+import { Bell, Trophy, User, Plus, Tools, List, Setting, ChatDotRound } from '@element-plus/icons-vue'
 const userRole = ref('')
 import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'

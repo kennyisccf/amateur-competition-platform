@@ -97,6 +97,9 @@
           <el-form-item label="用户名">
             <el-input :value="userInfo.username" disabled/>
           </el-form-item>
+          <el-form-item label="账号编号">
+            <el-input :value="userInfo.user_code || `U${String(userInfo.id || 0).padStart(6, '0')}`" disabled/>
+          </el-form-item>
           <el-form-item label="昵称">
             <el-input v-model="form.nickname"/>
           </el-form-item>

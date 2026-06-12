@@ -5,6 +5,7 @@ import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
 import Profile from '../views/Profile.vue'          
 import Notifications from '../views/Notifications.vue'
+import Friends from '../views/Friends.vue'
 import EventDetail from '../views/EventDetail.vue'
 import EventRegister from '../views/EventRegister.vue'
 import CreateCompetition from '../views/CreateCompetition.vue'
@@ -33,6 +34,7 @@ const routes = [
       { path: 'home', component: Home },
       { path: 'profile', name: 'Profile', component: Profile },
       { path: 'notifications', name: 'Notifications', component: Notifications },
+      { path: 'friends', name: 'Friends', component: Friends },
       { path: 'event-detail/:id', name: 'EventDetail', component: EventDetail },
       { path: 'event-register/:id', name: 'EventRegister', component: EventRegister, meta: { roles: ['PLAYER', 'ORGANIZER', 'ADMIN'] } },
       { path: 'create', name: 'CreateCompetition', component: CreateCompetition, meta: { roles: ['PLAYER', 'ORGANIZER', 'ADMIN'] } },

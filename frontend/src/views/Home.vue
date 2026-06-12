@@ -66,7 +66,7 @@
           @click="goToDetail(item.id)"
         >
 
-          <div class="card-image">
+          <div class="card-image" :class="{ 'has-image': item.thumbnail_url }" :style="eventImageStyle(item)">
             <span
               class="tag category-tag"
               :class="item.category.includes('电竞') ? 'purple' : 'blue'"
@@ -126,6 +126,13 @@ const goToDetail = (id) => {
 
 const formatRule = (item) => {
   return item.competition_format_text || '单淘汰'
+}
+
+const eventImageStyle = (item) => {
+  if (!item.thumbnail_url) return {}
+  return {
+    backgroundImage: `linear-gradient(to top, rgba(5, 23, 47, 0.78), rgba(5, 23, 47, 0.18)), url("${item.thumbnail_url}")`
+  }
 }
 
 const getCompetitionData = async () => {
@@ -268,6 +275,12 @@ onMounted(() => {
       #4facfe,
       #00f2fe
     );
+  background-size: cover;
+  background-position: center;
+}
+.card-image.has-image {
+  background-size: cover;
+  background-position: center;
 }
 
 .tag {

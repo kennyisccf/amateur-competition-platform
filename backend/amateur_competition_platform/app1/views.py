@@ -1,13 +1,17 @@
 from datetime import datetime, timedelta
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
+from pathlib import Path
 from hashlib import md5
 import hashlib
 from app1 import models
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from django.db import transaction, connection
 from django.db.models import Q
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 import json
 import string
 import random
@@ -111,6 +115,61 @@ def manageable_registrations(user):
         return registrations
     return registrations.filter(competition__organizer=user)
 
+DEMO_LOCAL_TZ = timezone.get_fixed_timezone(8 * 60)
+
+def parse_request_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = parse_datetime(text)
+        if parsed is None:
+            try:
+                parsed = datetime.fromisoformat(text)
+            except ValueError:
+                return None
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+def validate_competition_time(start_time, end_time):
+    start_dt = parse_request_datetime(start_time)
+    end_dt = parse_request_datetime(end_time)
+    if not start_dt or not end_dt:
+        return None, None, "请选择比赛开始和结束时间"
+    today = timezone.localtime(timezone.now(), DEMO_LOCAL_TZ).date()
+    start_day = timezone.localtime(start_dt, DEMO_LOCAL_TZ).date()
+    end_day = timezone.localtime(end_dt, DEMO_LOCAL_TZ).date()
+    if start_day < today or end_day < today:
+        return None, None, "比赛日期不能早于今天"
+    if end_dt <= start_dt:
+        return None, None, "比赛结束时间必须晚于开始时间"
+    return start_dt, end_dt, ""
+
+def finish_expired_competitions():
+    expired_ids = list(
+        models.Competition.objects.filter(
+            status__in=[1, 2],
+            end_time__lte=timezone.now()
+        ).values_list("id", flat=True)
+    )
+    if not expired_ids:
+        return 0
+    models.Competition.objects.filter(id__in=expired_ids).update(status=3)
+    models.Registration.objects.filter(
+        competition_id__in=expired_ids,
+        review_status=0
+    ).update(
+        review_status=2,
+        status="rejected",
+        audit_remark="比赛已到结束时间，系统自动关闭报名"
+    )
+    return len(expired_ids)
+
 def parse_bracket_state(competition):
     try:
         state = json.loads(competition.bracket_state or "{}")
@@ -121,7 +180,9 @@ def parse_bracket_state(competition):
     return {
         "drawSeed": state.get("drawSeed") or (competition.id * 100003),
         "winners": state.get("winners") if isinstance(state.get("winners"), dict) else {},
-        "rankings": state.get("rankings") if isinstance(state.get("rankings"), list) else []
+        "rankings": state.get("rankings") if isinstance(state.get("rankings"), list) else [],
+        "seedIds": [str(item) for item in state.get("seedIds", [])] if isinstance(state.get("seedIds"), list) else [],
+        "seedMode": "MANUAL" if state.get("seedMode") == "MANUAL" else "AUTO"
     }
 
 def serialize_registration(registration):
@@ -159,9 +220,29 @@ def can_view_competition_bracket(user, competition):
 COMPETITION_FORMATS = {
     "SINGLE_ELIMINATION": "单淘汰",
 }
+DEFAULT_THUMBNAILS = {
+    "篮球": "/default-thumbnails/basketball.png",
+    "足球": "/default-thumbnails/football.png",
+    "羽毛球": "/default-thumbnails/badminton.png",
+    "网球": "/default-thumbnails/tennis.png",
+    "电竞": "/default-thumbnails/esports.png",
+    "棋牌桌游": "/default-thumbnails/boardgame.png",
+}
+
+def default_thumbnail_for_category(category):
+    return DEFAULT_THUMBNAILS.get(category, "/default-thumbnails/badminton.png")
 
 def generate_competition_no(competition_id):
     return f"NO.{int(competition_id):08d}"
+
+def generate_user_code(user_id):
+    return f"U{int(user_id):06d}"
+
+def ensure_user_code(user):
+    if user and not user.user_code:
+        user.user_code = generate_user_code(user.id)
+        user.save(update_fields=["user_code"])
+    return user.user_code or generate_user_code(user.id)
 
 def normalize_member_names(raw_text):
     names = [
@@ -280,6 +361,13 @@ def delete_user_from_database(user, current_user):
         if registration.review_status == 1 and competition.current_participants > 0:
             competition.current_participants -= 1
             competition.save(update_fields=["current_participants"])
+    ensure_friend_relation_table()
+    models.FriendRelation.objects.filter(
+        Q(requester=user) | Q(addressee=user)
+    ).delete()
+    models.FriendMessage.objects.filter(
+        Q(sender=user) | Q(receiver=user)
+    ).delete()
     models.Registration.objects.filter(player=user).delete()
     models.AuditRecord.objects.filter(auditor=user).delete()
     user.delete()
@@ -295,7 +383,7 @@ def unique_test_username(prefix):
 
 def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role="PLAYER"):
     username = unique_test_username(prefix)
-    return models.User.objects.create(
+    user = models.User.objects.create(
         username=username,
         password=hashlib.md5("".encode()).hexdigest(),
         role=role,
@@ -305,6 +393,8 @@ def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role
         created_at=datetime.now(),
         is_deleted=False
     )
+    ensure_user_code(user)
+    return user
 
 @csrf_exempt
 def register(request):
@@ -329,7 +419,7 @@ def register(request):
     if models.User.objects.filter(username=username).exists():
         return JsonResponse({"success": False, "msg": "用户名已存在"})
     password_md5 = hashlib.md5(password.encode()).hexdigest()
-    models.User.objects.create(
+    user = models.User.objects.create(
         username=username,
         password=password_md5,
         nickname=nickname,
@@ -338,10 +428,12 @@ def register(request):
         created_at=datetime.now(),
         role=role
     )
+    ensure_user_code(user)
     return JsonResponse({"success": True, "msg": "注册成功"})
 
 @csrf_exempt
 def competition_list(request):
+    finish_expired_competitions()
     c_category = request.GET.get("category", "")
     keyword = request.GET.get("keyword", "").strip()
     competitions = models.Competition.objects.filter(status__in=[1, 2])
@@ -367,6 +459,7 @@ def competition_list(request):
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
+            "thumbnail_url": c.thumbnail_url or "",
             "competition_format": c.competition_format,
             "competition_format_text": COMPETITION_FORMATS.get(c.competition_format, "单淘汰"),
             "group_count": c.group_count,
@@ -386,6 +479,7 @@ def competition_list(request):
 
 @csrf_exempt
 def competition_detail(request, competition_id):
+    finish_expired_competitions()
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
@@ -416,6 +510,7 @@ def competition_detail(request, competition_id):
         "current_participants": competition.current_participants,
         "reward_points": getattr(competition, "reward_points", 100),
         "reward": competition.reward,
+        "thumbnail_url": competition.thumbnail_url or "",
         "competition_format": competition.competition_format,
         "competition_format_text": COMPETITION_FORMATS.get(competition.competition_format, "单淘汰"),
         "group_count": competition.group_count,
@@ -434,6 +529,7 @@ def user_detail(request):
     user = request.current_user
     data = {
         "id": user.id,
+        "user_code": ensure_user_code(user),
         "username": user.username,
         "nickname": user.nickname,
         "email": user.email,
@@ -444,6 +540,37 @@ def user_detail(request):
         "is_super_admin": is_super_admin(user),
     }
     return JsonResponse({"success": True, "data": data})
+
+@csrf_exempt
+@login_required
+def upload_competition_thumbnail(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    file_obj = request.FILES.get("file")
+    if not file_obj:
+        return JsonResponse({"success": False, "msg": "请选择要上传的图片"}, status=400)
+    if file_obj.size > 5 * 1024 * 1024:
+        return JsonResponse({"success": False, "msg": "缩图不能超过5MB"}, status=400)
+
+    suffix = Path(file_obj.name).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        return JsonResponse({"success": False, "msg": "只支持 JPG、PNG、WEBP 或 GIF 图片"}, status=400)
+
+    target_dir = Path(settings.MEDIA_ROOT) / "event_thumbnails"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    random_part = "".join(random.SystemRandom().choice(string.ascii_lowercase + string.digits) for _ in range(10))
+    filename = f"{request.current_user.id}_{int(timezone.now().timestamp())}_{random_part}{suffix}"
+    target_path = target_dir / filename
+    with target_path.open("wb") as target:
+        for chunk in file_obj.chunks():
+            target.write(chunk)
+
+    relative_url = f"{settings.MEDIA_URL}event_thumbnails/{filename}"
+    return JsonResponse({
+        "success": True,
+        "url": request.build_absolute_uri(relative_url),
+        "msg": "缩图上传成功"
+    })
 
 @login_required
 @csrf_exempt
@@ -464,6 +591,7 @@ def update_user(request):
 @csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 def register_competition(request):
+    finish_expired_competitions()
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
     try:
@@ -555,6 +683,7 @@ def generate_invite_code(length=6):
 @csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 def create_competition(request):
+    finish_expired_competitions()
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持 POST"}, status=405)
     try:
@@ -567,6 +696,7 @@ def create_competition(request):
         max_participants = data.get("max_participants", 100)
         reward_points = data.get("reward_points", 100)
         reward = data.get("reward", "").strip()
+        thumbnail_url = (data.get("thumbnail_url") or "").strip()
         competition_format = "SINGLE_ELIMINATION"
         group_count = data.get("group_count", 0)
         start_time = data.get("start_time")
@@ -589,8 +719,13 @@ def create_competition(request):
         reward_points = 0
     if max_participants <= 0 or reward_points < 0:
         return JsonResponse({"success": False, "msg": "人数或积分设置不合法"})
-    if not start_time or not end_time or str(end_time) <= str(start_time):
-        return JsonResponse({"success": False, "msg": "比赛时间设置不合法"})
+    if len(thumbnail_url) > 500:
+        return JsonResponse({"success": False, "msg": "缩图地址过长"})
+    if not thumbnail_url:
+        thumbnail_url = default_thumbnail_for_category(category)
+    start_dt, end_dt, time_error = validate_competition_time(start_time, end_time)
+    if time_error:
+        return JsonResponse({"success": False, "msg": time_error})
     organizer = request.current_user
     status = 0 if competition_type == "PUBLIC" else 1
     invite_code = ''
@@ -610,9 +745,10 @@ def create_competition(request):
         reward=reward,
         competition_format=competition_format,
         group_count=group_count,
-        start_time=start_time,
-        end_time=end_time,
-        invite_code=invite_code
+        start_time=start_dt,
+        end_time=end_dt,
+        invite_code=invite_code,
+        thumbnail_url=thumbnail_url
     )
     competition.competition_no = generate_competition_no(competition.id)
     competition.save(update_fields=["competition_no"])
@@ -628,6 +764,7 @@ def create_competition(request):
 @csrf_exempt
 @role_required("ADMIN")
 def pending_competitions(request): #管理员查看待审核的赛事
+    finish_expired_competitions()
     competitions = models.Competition.objects.filter(type='PUBLIC',status=0).order_by('-created_at')
     data = []
     for c in competitions:
@@ -639,6 +776,7 @@ def pending_competitions(request): #管理员查看待审核的赛事
             "location": c.location,
             "description": c.description,
             "reward": c.reward,
+            "thumbnail_url": c.thumbnail_url or "",
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
@@ -705,6 +843,7 @@ def review_competition(request):
 @csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 def my_competitions(request):
+    finish_expired_competitions()
     status = request.GET.get("status", "")
     competition_type = request.GET.get("type", "")
     keyword = request.GET.get("keyword", "").strip()
@@ -745,6 +884,7 @@ def my_competitions(request):
             "max_participants": c.max_participants,
             "current_participants": c.current_participants,
             "reward_points": c.reward_points,
+            "thumbnail_url": c.thumbnail_url or "",
             "competition_format": c.competition_format,
             "competition_format_text": COMPETITION_FORMATS.get(c.competition_format, "单淘汰"),
             "group_count": c.group_count,
@@ -772,6 +912,7 @@ def delete_competition(request, competition_id):
 @csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 def update_competition(request, competition_id):
+    finish_expired_competitions()
     if request.method != "PUT":return JsonResponse({"success": False,"msg": "仅支持 PUT"})
     competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
     if not competition:
@@ -795,6 +936,20 @@ def update_competition(request, competition_id):
         competition.competition_format = competition_format
         competition.group_count = group_count
         competition.reward = data.get("reward",competition.reward)
+        competition.thumbnail_url = (data.get("thumbnail_url", competition.thumbnail_url) or "").strip()
+        if competition.thumbnail_url and len(competition.thumbnail_url) > 500:
+            return JsonResponse({"success": False,"msg": "缩图地址过长"})
+        if not competition.thumbnail_url:
+            competition.thumbnail_url = default_thumbnail_for_category(competition.category)
+        if "start_time" in data or "end_time" in data:
+            start_dt, end_dt, time_error = validate_competition_time(
+                data.get("start_time", competition.start_time),
+                data.get("end_time", competition.end_time)
+            )
+            if time_error:
+                return JsonResponse({"success": False,"msg": time_error})
+            competition.start_time = start_dt
+            competition.end_time = end_dt
         competition.save()
     except Exception:
         return JsonResponse({"success": False,"msg": "请求格式错误"})
@@ -803,6 +958,7 @@ def update_competition(request, competition_id):
 
 @login_required
 def competition_registrations(request, competition_id):
+    finish_expired_competitions()
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False,"msg": "赛事不存在"})
@@ -821,6 +977,7 @@ def competition_registrations(request, competition_id):
 @login_required
 @csrf_exempt
 def competition_bracket(request, competition_id):
+    finish_expired_competitions()
     competition = models.Competition.objects.filter(id=competition_id).first()
     if not competition:
         return JsonResponse({"success": False, "msg": "赛事不存在"}, status=404)
@@ -853,10 +1010,27 @@ def competition_bracket(request, competition_id):
         if not isinstance(winners, dict):
             winners = {}
         rankings = normalize_bracket_rankings(state.get("rankings", []))
+        raw_seed_ids = state.get("seedIds", [])
+        if not isinstance(raw_seed_ids, list):
+            raw_seed_ids = []
+        approved_ids = set(
+            str(item)
+            for item in models.Registration.objects.filter(
+                competition=editable_competition,
+                review_status=1
+            ).values_list("id", flat=True)
+        )
+        seed_ids = []
+        for item in raw_seed_ids[:16]:
+            value = str(item).strip()
+            if value in approved_ids and value not in seed_ids:
+                seed_ids.append(value)
         safe_state = {
             "drawSeed": state.get("drawSeed") or (competition.id * 100003),
             "winners": winners,
-            "rankings": rankings
+            "rankings": rankings,
+            "seedIds": seed_ids,
+            "seedMode": "MANUAL" if state.get("seedMode") == "MANUAL" else "AUTO"
         }
         with transaction.atomic():
             editable_competition.bracket_state = json.dumps(safe_state, ensure_ascii=False)
@@ -1159,6 +1333,7 @@ def update_registration_status(request):
 @csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 def update_competition_status(request, competition_id):
+    finish_expired_competitions()
     if request.method != "POST":
         return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
     competition = manageable_competitions(request.current_user).filter(id=competition_id).first()
@@ -1249,6 +1424,7 @@ def admin_users(request):
     for u in users:
         data.append({
             "user_id": u.id,
+            "user_code": ensure_user_code(u),
             "username": u.username,
             "nickname": u.nickname,
             "email": u.email,
@@ -1294,7 +1470,8 @@ def admin_create_user(request):
         created_at=datetime.now(),
         is_deleted=False
     )
-    return JsonResponse({"success": True, "msg": "用户创建成功", "user_id": user.id})
+    ensure_user_code(user)
+    return JsonResponse({"success": True, "msg": "用户创建成功", "user_id": user.id, "user_code": user.user_code})
 
 @csrf_exempt
 @role_required("ADMIN")
@@ -1339,8 +1516,10 @@ def admin_bulk_create_users(request):
             created_at=datetime.now(),
             is_deleted=False
         )
+        ensure_user_code(user)
         created.append({
             "user_id": user.id,
+            "user_code": user.user_code,
             "username": user.username,
             "nickname": user.nickname,
             "role": user.role
@@ -1476,7 +1655,8 @@ def admin_bulk_create_competitions(request):
             group_count=0,
             start_time=start_time,
             end_time=end_time,
-            invite_code=generate_invite_code() if c_type == "PRIVATE" else None
+            invite_code=generate_invite_code() if c_type == "PRIVATE" else None,
+            thumbnail_url=default_thumbnail_for_category(category)
         )
         competition.competition_no = generate_competition_no(competition.id)
         competition.save(update_fields=["competition_no"])
@@ -1605,9 +1785,338 @@ def audit_records(request):
 
     return JsonResponse({"success": True, "records": data})
 
+def ensure_friend_relation_table():
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS friend_relation (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                requester_id BIGINT NOT NULL,
+                addressee_id BIGINT NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uniq_friend_pair (requester_id, addressee_id),
+                KEY idx_friend_requester (requester_id),
+                KEY idx_friend_addressee (addressee_id),
+                KEY idx_friend_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS friend_message (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                sender_id BIGINT NOT NULL,
+                receiver_id BIGINT NOT NULL,
+                content VARCHAR(500) NOT NULL,
+                is_read TINYINT(1) NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_friend_message_pair (sender_id, receiver_id, created_at),
+                KEY idx_friend_message_unread (receiver_id, is_read)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
+def relation_between_users(user_id, target_id):
+    return models.FriendRelation.objects.filter(
+        Q(requester_id=user_id, addressee_id=target_id) |
+        Q(requester_id=target_id, addressee_id=user_id)
+    ).first()
+
+def accepted_relation_between_users(user_id, target_id):
+    return models.FriendRelation.objects.filter(
+        status="accepted"
+    ).filter(
+        Q(requester_id=user_id, addressee_id=target_id) |
+        Q(requester_id=target_id, addressee_id=user_id)
+    ).first()
+
+def serialize_friend_user(user, relation=None, current_user=None):
+    payload = {
+        "user_id": user.id,
+        "user_code": ensure_user_code(user),
+        "username": user.username,
+        "nickname": user.nickname,
+        "role": user.role,
+        "points": user.points,
+        "allow_friend_requests": bool(user.allow_friend_requests),
+        "can_request_friend": bool(user.allow_friend_requests),
+    }
+    if relation:
+        payload["relation_id"] = relation.id
+        payload["relation_status"] = relation.status
+        payload["can_request_friend"] = relation.status not in {"accepted", "pending"}
+        if current_user and relation.status == "pending":
+            payload["relation_direction"] = "incoming" if relation.addressee_id == current_user.id else "outgoing"
+        elif relation.status == "accepted":
+            payload["relation_direction"] = "friend"
+    return payload
+
+@login_required
+def friends(request):
+    if request.method != "GET":
+        return JsonResponse({"success": False, "msg": "仅支持GET"}, status=405)
+    ensure_friend_relation_table()
+    user = request.current_user
+    accepted = models.FriendRelation.objects.filter(
+        status="accepted"
+    ).filter(
+        Q(requester=user) | Q(addressee=user)
+    ).select_related("requester", "addressee").order_by("-updated_at")
+    pending_incoming = models.FriendRelation.objects.filter(
+        addressee=user,
+        status="pending"
+    ).select_related("requester").order_by("-created_at")
+    pending_outgoing = models.FriendRelation.objects.filter(
+        requester=user,
+        status="pending"
+    ).select_related("addressee").order_by("-created_at")
+
+    friend_list = []
+    for relation in accepted:
+        friend = relation.addressee if relation.requester_id == user.id else relation.requester
+        friend_payload = serialize_friend_user(friend, relation, user)
+        unread_count = models.FriendMessage.objects.filter(
+            sender=friend,
+            receiver=user,
+            is_read=False
+        ).count()
+        last_message = models.FriendMessage.objects.filter(
+            Q(sender=user, receiver=friend) | Q(sender=friend, receiver=user)
+        ).order_by("-created_at").first()
+        friend_payload["unread_count"] = unread_count
+        friend_payload["last_message"] = last_message.content if last_message else ""
+        friend_payload["last_message_time"] = last_message.created_at.strftime("%Y-%m-%d %H:%M") if last_message else ""
+        friend_list.append(friend_payload)
+
+    return JsonResponse({
+        "success": True,
+        "allow_friend_requests": bool(user.allow_friend_requests),
+        "friends": friend_list,
+        "incoming": [
+            serialize_friend_user(relation.requester, relation, user)
+            for relation in pending_incoming
+        ],
+        "outgoing": [
+            serialize_friend_user(relation.addressee, relation, user)
+            for relation in pending_outgoing
+        ]
+    })
+
+@login_required
+def friend_search(request):
+    if request.method != "GET":
+        return JsonResponse({"success": False, "msg": "仅支持GET"}, status=405)
+    ensure_friend_relation_table()
+    user = request.current_user
+    keyword = request.GET.get("keyword", "").strip()
+    users = models.User.objects.filter(is_deleted=False).exclude(id=user.id)
+    if keyword:
+        users = users.filter(
+            Q(username__icontains=keyword) |
+            Q(nickname__icontains=keyword) |
+            Q(user_code__icontains=keyword)
+        )
+    users = list(users.order_by("-points", "username")[:30])
+    relation_map = {}
+    for relation in models.FriendRelation.objects.filter(
+        Q(requester=user, addressee_id__in=[item.id for item in users]) |
+        Q(addressee=user, requester_id__in=[item.id for item in users])
+    ):
+        other_id = relation.addressee_id if relation.requester_id == user.id else relation.requester_id
+        relation_map[other_id] = relation
+    return JsonResponse({
+        "success": True,
+        "users": [
+            serialize_friend_user(item, relation_map.get(item.id), user)
+            for item in users
+        ]
+    })
+
+@csrf_exempt
+@login_required
+def send_friend_request(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    ensure_friend_relation_table()
+    try:
+        data = json.loads(request.body)
+        target_id = int(data.get("user_id"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    user = request.current_user
+    if target_id == user.id:
+        return JsonResponse({"success": False, "msg": "不能添加自己为好友"})
+    target = models.User.objects.filter(id=target_id, is_deleted=False).first()
+    if not target:
+        return JsonResponse({"success": False, "msg": "用户不存在或已被封禁"})
+    relation = relation_between_users(user.id, target.id)
+    if relation:
+        if relation.status == "accepted":
+            return JsonResponse({"success": False, "msg": "已经是好友"})
+        if relation.status == "pending" and relation.addressee_id == user.id:
+            relation.status = "accepted"
+            relation.save(update_fields=["status", "updated_at"])
+            return JsonResponse({"success": True, "msg": "已通过对方的好友申请"})
+        if relation.status == "pending":
+            return JsonResponse({"success": False, "msg": "好友申请已发送，请等待对方处理"})
+        if not target.allow_friend_requests:
+            return JsonResponse({"success": False, "msg": "对方已关闭好友申请"})
+        relation.requester = user
+        relation.addressee = target
+        relation.status = "pending"
+        relation.save(update_fields=["requester", "addressee", "status", "updated_at"])
+    else:
+        if not target.allow_friend_requests:
+            return JsonResponse({"success": False, "msg": "对方已关闭好友申请"})
+        relation = models.FriendRelation.objects.create(
+            requester=user,
+            addressee=target,
+            status="pending"
+        )
+    return JsonResponse({"success": True, "msg": "好友申请已发送", "relation_id": relation.id})
+
+@csrf_exempt
+@login_required
+def respond_friend_request(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    ensure_friend_relation_table()
+    try:
+        data = json.loads(request.body)
+        relation_id = int(data.get("relation_id"))
+        action = str(data.get("action", "")).strip()
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    relation = models.FriendRelation.objects.filter(
+        id=relation_id,
+        addressee=request.current_user,
+        status="pending"
+    ).first()
+    if not relation:
+        return JsonResponse({"success": False, "msg": "好友申请不存在或已处理"})
+    if action == "accept":
+        relation.status = "accepted"
+        msg = "已通过好友申请"
+    elif action == "reject":
+        relation.status = "rejected"
+        msg = "已拒绝好友申请"
+    else:
+        return JsonResponse({"success": False, "msg": "操作类型错误"})
+    relation.save(update_fields=["status", "updated_at"])
+    return JsonResponse({"success": True, "msg": msg})
+
+@csrf_exempt
+@login_required
+def delete_friend(request, user_id):
+    if request.method != "DELETE":
+        return JsonResponse({"success": False, "msg": "仅支持DELETE"}, status=405)
+    ensure_friend_relation_table()
+    relation = models.FriendRelation.objects.filter(
+        status="accepted"
+    ).filter(
+        Q(requester=request.current_user, addressee_id=user_id) |
+        Q(addressee=request.current_user, requester_id=user_id)
+    ).first()
+    if not relation:
+        return JsonResponse({"success": False, "msg": "好友关系不存在"})
+    relation.delete()
+    return JsonResponse({"success": True, "msg": "好友已删除"})
+
+@csrf_exempt
+@login_required
+def friend_settings(request):
+    if request.method == "GET":
+        return JsonResponse({
+            "success": True,
+            "allow_friend_requests": bool(request.current_user.allow_friend_requests)
+        })
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持GET或POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    allow = bool(data.get("allow_friend_requests", True))
+    request.current_user.allow_friend_requests = allow
+    request.current_user.save(update_fields=["allow_friend_requests"])
+    return JsonResponse({
+        "success": True,
+        "msg": "好友申请设置已更新",
+        "allow_friend_requests": allow
+    })
+
+@csrf_exempt
+@login_required
+def friend_messages(request, user_id):
+    ensure_friend_relation_table()
+    user = request.current_user
+    friend = models.User.objects.filter(id=user_id, is_deleted=False).first()
+    if not friend:
+        return JsonResponse({"success": False, "msg": "好友不存在"}, status=404)
+    if not accepted_relation_between_users(user.id, friend.id):
+        return JsonResponse({"success": False, "msg": "只有好友之间可以聊天"}, status=403)
+
+    if request.method == "GET":
+        models.FriendMessage.objects.filter(
+            sender=friend,
+            receiver=user,
+            is_read=False
+        ).update(is_read=True)
+        records = models.FriendMessage.objects.filter(
+            Q(sender=user, receiver=friend) | Q(sender=friend, receiver=user)
+        ).order_by("created_at", "id")[:300]
+        return JsonResponse({
+            "success": True,
+            "friend": serialize_friend_user(friend, accepted_relation_between_users(user.id, friend.id), user),
+            "messages": [
+                {
+                    "id": item.id,
+                    "sender_id": item.sender_id,
+                    "receiver_id": item.receiver_id,
+                    "content": item.content,
+                    "mine": item.sender_id == user.id,
+                    "is_read": item.is_read,
+                    "created_at": item.created_at.strftime("%Y-%m-%d %H:%M")
+                }
+                for item in records
+            ]
+        })
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            content = str(data.get("content", "")).strip()
+        except (TypeError, json.JSONDecodeError):
+            return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+        if not content:
+            return JsonResponse({"success": False, "msg": "消息内容不能为空"})
+        if len(content) > 500:
+            return JsonResponse({"success": False, "msg": "消息内容不能超过500字"})
+        message = models.FriendMessage.objects.create(
+            sender=user,
+            receiver=friend,
+            content=content,
+            is_read=False
+        )
+        return JsonResponse({
+            "success": True,
+            "msg": "消息已发送",
+            "message": {
+                "id": message.id,
+                "sender_id": message.sender_id,
+                "receiver_id": message.receiver_id,
+                "content": message.content,
+                "mine": True,
+                "is_read": False,
+                "created_at": message.created_at.strftime("%Y-%m-%d %H:%M")
+            }
+        })
+
+    return JsonResponse({"success": False, "msg": "仅支持GET或POST"}, status=405)
+
 @login_required
 def notifications(request):
+    finish_expired_competitions()
     user = request.current_user
+    ensure_friend_relation_table()
     messages = []
     for competition in models.Competition.objects.filter(organizer=user, status=4).order_by("-created_at"):
         messages.append({
@@ -1631,12 +2140,61 @@ def notifications(request):
             "competition_id": registration.competition_id,
             "created_at": registration.registration_time.strftime("%Y-%m-%d %H:%M")
         })
+    incoming_requests = models.FriendRelation.objects.filter(
+        addressee=user,
+        status="pending"
+    ).select_related("requester").order_by("-created_at")
+    for relation in incoming_requests:
+        requester_name = relation.requester.nickname or relation.requester.username
+        messages.append({
+            "id": f"friend-request-{relation.id}",
+            "type": "好友申请",
+            "title": f"{requester_name} 想添加你为好友",
+            "content": "可以在这里直接通过或拒绝，也可以进入好友系统查看。",
+            "friend_relation_id": relation.id,
+            "action_required": True,
+            "created_at": relation.created_at.strftime("%Y-%m-%d %H:%M")
+        })
+    accepted_requests = models.FriendRelation.objects.filter(
+        requester=user,
+        status="accepted"
+    ).select_related("addressee").order_by("-updated_at")[:10]
+    for relation in accepted_requests:
+        friend_name = relation.addressee.nickname or relation.addressee.username
+        messages.append({
+            "id": f"friend-accepted-{relation.id}",
+            "type": "好友通知",
+            "title": f"{friend_name} 已通过你的好友申请",
+            "content": "现在可以在好友系统中查看对方。",
+            "friend_relation_id": relation.id,
+            "created_at": relation.updated_at.strftime("%Y-%m-%d %H:%M")
+        })
+    unread_messages = models.FriendMessage.objects.filter(
+        receiver=user,
+        is_read=False
+    ).select_related("sender").order_by("-created_at")
+    unread_by_sender = {}
+    for item in unread_messages:
+        if item.sender_id not in unread_by_sender:
+            unread_by_sender[item.sender_id] = {"sender": item.sender, "count": 0, "latest": item}
+        unread_by_sender[item.sender_id]["count"] += 1
+    for info in unread_by_sender.values():
+        sender_name = info["sender"].nickname or info["sender"].username
+        messages.append({
+            "id": f"friend-message-{info['sender'].id}",
+            "type": "好友消息",
+            "title": f"{sender_name} 发来 {info['count']} 条新消息",
+            "content": info["latest"].content,
+            "friend_user_id": info["sender"].id,
+            "created_at": info["latest"].created_at.strftime("%Y-%m-%d %H:%M")
+        })
     messages.sort(key=lambda item: item.get("created_at", ""), reverse=True)
     return JsonResponse({"success": True, "messages": messages})
 
 @csrf_exempt
 @role_required("ADMIN")
 def admin_stats(request):
+    finish_expired_competitions()
     return JsonResponse({
         "success": True,
         "data": {

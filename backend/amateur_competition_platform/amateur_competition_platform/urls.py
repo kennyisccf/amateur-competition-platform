@@ -20,6 +20,8 @@ from django.urls import path
 from app1 import views
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
+from django.conf import settings
+from django.conf.urls.static import static
 def get_csrf_token(request):
     token = get_token(request)
     return JsonResponse({'csrfToken': token})
@@ -29,6 +31,7 @@ urlpatterns = [
     path('api/login-captcha/', views.login_captcha, name='login_captcha'),
     path('api/logout/', views.logout, name='logout'),
     path('api/register/', views.register, name='register'),
+    path('api/upload/competition_thumbnail/', views.upload_competition_thumbnail),
     path('api/competitions/',views.competition_list, name='competition_list'),
     path('api/competition/<int:competition_id>/', views.competition_detail, name='competition_detail'),
     path('api/user/', views.user_detail, name="user_detail"),
@@ -44,6 +47,13 @@ urlpatterns = [
     path('api/competitions/<int:competition_id>/bracket/', views.competition_bracket),
     path('api/my_registrations/',views.my_registrations),
     path('api/notifications/', views.notifications),
+    path('api/friends/', views.friends),
+    path('api/friends/search/', views.friend_search),
+    path('api/friends/request/', views.send_friend_request),
+    path('api/friends/respond/', views.respond_friend_request),
+    path('api/friends/settings/', views.friend_settings),
+    path('api/friends/<int:user_id>/messages/', views.friend_messages),
+    path('api/friends/<int:user_id>/delete/', views.delete_friend),
     path('api/registrations/visibility/', views.update_registration_visibility),
     path("api/cancel_registration/",views.cancel_registration),
     path('api/approve_registration/',views.approve_registration),
@@ -67,3 +77,6 @@ urlpatterns = [
     path('csrf/', get_csrf_token, name = 'get_csrf_token'),
 
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
