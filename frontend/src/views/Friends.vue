@@ -326,7 +326,7 @@ onMounted(async () => {
 .friends-page {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--page-padding);
 }
 .friends-hero,
 .panel {

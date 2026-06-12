@@ -1,5 +1,15 @@
 <template>
   <div class="login-container">
+    <div
+      v-for="(image, index) in backgroundImages"
+      :key="image"
+      class="login-bg"
+      :class="{ active: index === activeBgIndex }"
+      :style="{
+        backgroundImage: `url(${image})`
+      }"
+    />
+    <div class="login-scrim" />
     <div class="login-left">
       <h1>乐赛</h1>
       <p>一站式服务平台 · 精彩有你</p>
@@ -56,7 +66,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
@@ -69,6 +79,42 @@ const form = ref({
 })
 const captchaCode = ref('')
 const captchaLoading = ref(false)
+let backgroundTimer = null
+const backgroundImages = [
+  '/login-backgrounds/badminton-login.png',
+  '/login-backgrounds/football-login.png',
+  '/login-backgrounds/esports-login.png',
+  '/login-backgrounds/basketball-login.png',
+  '/login-backgrounds/tennis-login.png',
+  '/login-backgrounds/tabletennis-login.png',
+  '/login-backgrounds/track-login.png',
+  '/login-backgrounds/volleyball-login.png',
+  '/login-backgrounds/swimming-login.png'
+]
+const activeBgIndex = ref(Math.floor(Math.random() * backgroundImages.length))
+
+const preloadBackgrounds = () => {
+  backgroundImages.forEach((src) => {
+    const image = new Image()
+    image.src = src
+  })
+}
+
+const pickNextBackgroundIndex = () => {
+  if (backgroundImages.length <= 1) return 0
+  let nextIndex = activeBgIndex.value
+  while (nextIndex === activeBgIndex.value) {
+    nextIndex = Math.floor(Math.random() * backgroundImages.length)
+  }
+  return nextIndex
+}
+
+const startBackgroundLoop = () => {
+  if (backgroundTimer) return
+  backgroundTimer = window.setInterval(() => {
+    activeBgIndex.value = pickNextBackgroundIndex()
+  }, 6000)
+}
 
 const loadCaptcha = async () => {
   captchaLoading.value = true
@@ -78,7 +124,6 @@ const loadCaptcha = async () => {
     form.value.captcha = ''
   } catch (err) {
     captchaCode.value = '重试'
-    console.error(err)
   } finally {
     captchaLoading.value = false
   }
@@ -132,33 +177,74 @@ const handleLogin = async () => {
     }
   }
   catch (err) {
-    console.error(err)
     ElMessage.error(err.response?.data?.msg || '请求失败，请检查后端服务')
     loadCaptcha()
   }
 }
 
-onMounted(loadCaptcha)
+onMounted(() => {
+  preloadBackgrounds()
+  loadCaptcha()
+  startBackgroundLoop()
+})
+
+onBeforeUnmount(() => {
+  if (backgroundTimer) {
+    window.clearInterval(backgroundTimer)
+    backgroundTimer = null
+  }
+})
 </script>
 
 <style scoped>
 .login-container {
+  position: relative;
   display: flex;
-  height: 100vh;
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  min-height: 100dvh;
   align-items: center;
   justify-content: space-around;
-  padding: 0 10%;
+  gap: clamp(32px, 6vw, 92px);
+  padding: clamp(32px, 7vw, 96px) clamp(24px, 8vw, 128px);
+  overflow: hidden;
+  background: #081c3a;
+}
+.login-bg,
+.login-scrim {
+  position: absolute;
+  inset: 0;
+}
+.login-bg {
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transform: scale(1.03);
+  transition: opacity 1.2s ease, transform 6s ease;
+  will-change: opacity, transform;
+}
+.login-bg.active {
+  opacity: 1;
+  transform: scale(1.06);
+}
+.login-scrim {
+  background:
+    radial-gradient(circle at 18% 25%, rgba(22, 119, 255, 0.42), transparent 32%),
+    linear-gradient(90deg, rgba(5, 16, 38, 0.86) 0%, rgba(5, 16, 38, 0.54) 48%, rgba(5, 16, 38, 0.78) 100%);
+  backdrop-filter: saturate(1.08);
 }
 .login-left {
+  position: relative;
+  z-index: 1;
   color: white;
+  max-width: 480px;
 }
 .login-left h1 {
-  font-size: 48px;
+  font-size: clamp(42px, 5vw, 68px);
   margin: 0 0 12px;
+  color: #fff;
+  font-weight: 800;
 }
 .login-left p {
-  font-size: 20px;
+  font-size: clamp(18px, 2vw, 24px);
   opacity: 0.9;
   margin: 0 0 24px;
 }
@@ -168,20 +254,28 @@ onMounted(loadCaptcha)
 }
 .tags span {
   padding: 6px 16px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 20px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 999px;
   font-size: 14px;
+  backdrop-filter: blur(10px);
 }
 .login-form-card {
-  background: white;
-  padding: 32px;
-  border-radius: 12px;
-  width: 360px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.92);
+  padding: clamp(26px, 3vw, 36px);
+  border: 1px solid rgba(255,255,255,0.58);
+  border-radius: 14px;
+  width: min(380px, 100%);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+  backdrop-filter: blur(18px);
 }
 .login-form-card h2 {
   margin: 0 0 8px;
   font-size: 24px;
+  font-weight: 800;
+  color: #10233f;
 }
 .login-form-card p {
   color: #666;
@@ -236,5 +330,33 @@ onMounted(loadCaptcha)
 .form-footer a, .form-footer span a {
   color: #1677ff;
   text-decoration: none;
+}
+
+@media (max-width: 860px) {
+  .login-container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+  }
+
+  .login-left {
+    max-width: none;
+    text-align: center;
+  }
+
+  .tags {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .login-form-card {
+    margin: 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bg {
+    transition: opacity 0.2s linear;
+  }
 }
 </style>

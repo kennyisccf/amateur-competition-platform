@@ -119,7 +119,7 @@ onMounted(loadMessages)
 
 <style scoped>
 .notice-container {
-  padding: 24px;
+  padding: var(--page-padding);
   max-width: 960px;
   margin: 0 auto;
 }

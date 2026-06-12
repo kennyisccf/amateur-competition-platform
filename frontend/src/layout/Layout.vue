@@ -137,7 +137,7 @@ const handleLogout = () => {
 
 <style scoped>
 .logo-area {
-  padding: 24px;
+  padding: 24px 20px;
   color: white;
 }
 .logo-area h1 {
@@ -171,30 +171,111 @@ const handleLogout = () => {
 .sidebar {
   background: #1677ff;
   position: relative;
-  height: 100vh;
-  overflow: hidden;
+  height: 100dvh;
+  overflow: hidden auto;
 }
 .app-shell {
-  height: 100vh;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
 }
 .content-shell {
   min-width: 0;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 .content-main {
   padding: 0;
   background: #f5f7fa;
-  height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
   min-width: 0;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 .content-main::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 8px;
+  height: 8px;
+}
+.content-main::-webkit-scrollbar-thumb {
+  background: #c9d4e4;
+  border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    height: auto;
+    max-height: 38vh;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .logo-area {
+    flex: 0 0 auto;
+    padding: 8px 10px 8px 0;
+  }
+
+  .logo-area h1 {
+    font-size: 22px;
+  }
+
+  .logo-area p,
+  .menu-title {
+    display: none;
+  }
+
+  .menu-group {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+
+  .menu-group :deep(.el-menu) {
+    display: flex;
+    border-right: 0;
+  }
+
+  .menu-group :deep(.el-menu-item) {
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 8px;
+  }
+
+  .logout-area {
+    position: static;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .logout-area :deep(.el-button) {
+    width: auto !important;
+  }
+
+  .content-shell,
+  .content-main {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .sidebar {
+    padding: 8px;
+  }
+
+  .menu-group :deep(.el-menu-item span) {
+    display: none;
+  }
 }
 </style>

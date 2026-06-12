@@ -317,8 +317,8 @@
       种子选手表示首轮保送。系统只会在人数不规则、存在保送位时按积分推荐；你也可以手动指定，最多 {{ recommendedSeedLimit }} 位。
     </div>
     <el-radio-group v-model="selectedSeedMode" class="seed-mode">
-      <el-radio-button label="AUTO">系统自动推荐</el-radio-button>
-      <el-radio-button label="MANUAL">手动设置</el-radio-button>
+      <el-radio-button value="AUTO">系统自动推荐</el-radio-button>
+      <el-radio-button value="MANUAL">手动设置</el-radio-button>
     </el-radio-group>
     <el-select
       v-model="selectedSeedIds"
@@ -923,8 +923,8 @@ onMounted(async () => {
 
 <style scoped>
 .registration-manage-container {
-  padding: 24px;
-  max-width: 1280px;
+  padding: var(--page-padding);
+  max-width: min(1440px, 100%);
   margin: 0 auto;
 }
 .registration-manage-container h2 {

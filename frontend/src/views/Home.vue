@@ -7,7 +7,6 @@
         找 <span>精彩赛事</span>，上乐赛
       </h2>
 
-      <!-- 搜索框 -->
       <div class="search-bar">
         <el-input
           v-model="searchKeyword"
@@ -21,47 +20,54 @@
         >
           搜索
         </el-button>
+        <el-select v-model="sortMode" class="sort-select" placeholder="排序">
+          <el-option label="最新发布" value="latest" />
+          <el-option label="报名最多" value="popular" />
+          <el-option label="名额紧张" value="filling" />
+        </el-select>
       </div>
 
-      <!-- 分类 -->
       <div class="category-tabs">
         <el-radio-group v-model="category">
 
-          <el-radio-button label="">全部品类</el-radio-button>
+          <el-radio-button value="">全部品类</el-radio-button>
 
-          <el-radio-button label="篮球">篮球</el-radio-button>
+          <el-radio-button value="篮球">篮球</el-radio-button>
 
-          <el-radio-button label="足球">足球</el-radio-button>
+          <el-radio-button value="足球">足球</el-radio-button>
 
-          <el-radio-button label="羽毛球">羽毛球</el-radio-button>
+          <el-radio-button value="羽毛球">羽毛球</el-radio-button>
 
-          <el-radio-button label="网球">网球</el-radio-button>
+          <el-radio-button value="网球">网球</el-radio-button>
 
-          <el-radio-button label="电竞">电竞</el-radio-button>
+          <el-radio-button value="电竞">电竞</el-radio-button>
 
-          <el-radio-button label="棋牌桌游">棋牌桌游</el-radio-button>
+          <el-radio-button value="棋牌桌游">棋牌桌游</el-radio-button>
         </el-radio-group>
       </div>
     </div>
 
-    <!-- 赛事列表 -->
     <div class="event-section">
 
-      <div class="section-title">🔥 赛事大厅</div>
+      <div class="section-head">
+        <div>
+          <div class="section-title">赛事大厅</div>
+          <div class="section-subtitle">
+            共 {{ hallStats.total }} 场赛事，{{ hallStats.open }} 场正在报名，{{ hallStats.running }} 场进行中
+          </div>
+        </div>
+      </div>
 
-      <!-- 加载 -->
       <div v-if="loading" class="loading">
         加载赛事中...
       </div>
-      <!-- 空数据 -->
       <el-empty v-else-if="competitionList.length === 0" description="暂无赛事"/>
 
-      <!-- 数据 -->
       <div v-else class="event-grid">
 
         <div
           class="event-card"
-          v-for="item in competitionList"
+          v-for="item in visibleCompetitionList"
           :key="item.id"
           @click="goToDetail(item.id)"
         >
@@ -69,9 +75,9 @@
           <div class="card-image" :class="{ 'has-image': item.thumbnail_url }" :style="eventImageStyle(item)">
             <span
               class="tag category-tag"
-              :class="item.category.includes('电竞') ? 'purple' : 'blue'"
+              :class="String(item.category || '').includes('电竞') ? 'purple' : 'blue'"
             >
-              {{ item.category }}
+              {{ item.category || '其他' }}
             </span>
             <span
               class="tag type-tag"
@@ -79,20 +85,29 @@
             >
               {{ item.type === 'PRIVATE' ? '私人赛' : '公开赛' }}
             </span>
-            <span class="tag status-tag" :class="item.status === 2 ? 'primary' : 'green'">
-              {{ item.status === 2 ? '进行中' : '报名中' }}
+            <span class="tag status-tag" :class="getStatusClass(item.status)">
+              {{ getStatusText(item.status) }}
             </span>
 
             <div class="card-overlay">
               <p class="event-no">{{ item.competition_no }}</p>
-              <h3>{{ item.title }}</h3>
-              <p>📍地点：{{ item.location }}</p>
+              <h3>{{ displayTitle(item) }}</h3>
+              <p>地点：{{ item.location || '待公布' }}</p>
               <p>赛制：{{ formatRule(item) }}</p>
             </div>
           </div>
           <div class="card-footer">
-            <div>已报名：{{ item.current_participants }}/{{ item.max_participants }}</div>
-            <div>{{ item.type === 'PRIVATE' ? '私人赛无积分' : `奖励积分：${item.reward_points}` }}</div>
+            <div class="participant-block">
+              <span>已报名：{{ item.current_participants }}/{{ item.max_participants }}</span>
+              <el-progress
+                :percentage="getFillPercent(item)"
+                :show-text="false"
+                :stroke-width="6"
+              />
+            </div>
+            <div class="reward-text">
+              {{ getRewardText(item) }}
+            </div>
           </div>
 
         </div>
@@ -105,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
@@ -120,12 +135,58 @@ const category = ref('')
 
 const competitionList = ref([])
 
+const sortMode = ref('latest')
+
+const hallStats = computed(() => ({
+  total: competitionList.value.length,
+  open: competitionList.value.filter(item => item.status === 1).length,
+  running: competitionList.value.filter(item => item.status === 2).length
+}))
+
+const visibleCompetitionList = computed(() => {
+  const list = [...competitionList.value]
+  if (sortMode.value === 'popular') {
+    return list.sort((a, b) => Number(b.current_participants || 0) - Number(a.current_participants || 0))
+  }
+  if (sortMode.value === 'filling') {
+    return list.sort((a, b) => getFillPercent(b) - getFillPercent(a))
+  }
+  return list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+})
+
 const goToDetail = (id) => {
   router.push(`/event-detail/${id}`)
 }
 
 const formatRule = (item) => {
   return item.competition_format_text || '单淘汰'
+}
+
+const displayTitle = (item) => String(item.title || '').trim() || '未命名赛事'
+
+const getStatusText = (status) => ({
+  1: '报名中',
+  2: '进行中',
+  3: '已结束',
+  4: '已驳回'
+}[status] || '待审核')
+
+const getStatusClass = (status) => ({
+  1: 'green',
+  2: 'primary',
+  3: 'gray',
+  4: 'red'
+}[status] || 'orange')
+
+const getFillPercent = (item) => {
+  const max = Number(item.max_participants || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round(Number(item.current_participants || 0) / max * 100))
+}
+
+const getRewardText = (item) => {
+  if (item.type === 'PRIVATE') return '私人赛无积分'
+  return `奖励积分：${item.reward_points || 0}`
 }
 
 const eventImageStyle = (item) => {
@@ -166,8 +227,6 @@ const getCompetitionData = async () => {
 
   } catch (error) {
 
-    console.error(error)
-
     ElMessage.error('无法连接服务器')
 
   } finally {
@@ -193,8 +252,8 @@ onMounted(() => {
 <style scoped>
 
 .home-page {
-  min-height: 100vh;
-  padding: 30px 60px;
+  min-height: 100%;
+  padding: clamp(22px, 3vw, 36px) clamp(16px, 4vw, 60px);
   background: linear-gradient(
     to bottom,
     #eaf4ff,
@@ -221,10 +280,15 @@ onMounted(() => {
   justify-content: center;
   gap: 10px;
   margin-bottom: 25px;
+  flex-wrap: wrap;
 }
 
 .search-bar .el-input {
   width: 420px;
+}
+
+.sort-select {
+  width: 132px;
 }
 
 .category-tabs {
@@ -233,20 +297,33 @@ onMounted(() => {
 }
 
 .event-section {
-  max-width: 1200px;
+  max-width: min(1360px, 100%);
   margin: 0 auto;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .section-title {
   font-size: 20px;
   font-weight: bold;
-  margin-bottom: 25px;
+}
+
+.section-subtitle {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 14px;
 }
 
 .event-grid {
   display: grid;
   grid-template-columns:
-    repeat(auto-fill, minmax(320px, 1fr));
+    repeat(auto-fill, minmax(min(100%, 290px), 1fr));
   gap: 24px;
 }
 
@@ -268,7 +345,9 @@ onMounted(() => {
 
 .card-image {
   position: relative;
-  height: 220px;
+  aspect-ratio: 16 / 9;
+  min-height: 180px;
+  height: auto;
   background:
     linear-gradient(
       135deg,
@@ -316,6 +395,14 @@ onMounted(() => {
   background: #1d4ed8;
 }
 
+.gray {
+  background: #8c8c8c;
+}
+
+.red {
+  background: #f56c6c;
+}
+
 .purple {
   background: #722ed1;
 }
@@ -361,10 +448,26 @@ onMounted(() => {
   display: flex;
 
   justify-content: space-between;
+  gap: 14px;
 
   font-size: 14px;
 
   color: #666;
+}
+
+.participant-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.participant-block span {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.reward-text {
+  color: #475467;
+  white-space: nowrap;
 }
 
 .loading {
@@ -376,6 +479,31 @@ onMounted(() => {
   font-size: 18px;
 
   color: #666;
+}
+
+@media (max-width: 768px) {
+  .home-page {
+    padding: 22px 16px;
+  }
+
+  .header-section h2 {
+    font-size: 26px;
+  }
+
+  .search-bar .el-input,
+  .sort-select {
+    width: 100%;
+  }
+
+  .event-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .category-tabs {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
 }
 
 </style>

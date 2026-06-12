@@ -208,7 +208,7 @@ onMounted(() => {
 
 <style scoped>
 .event-register-container {
-  padding: 24px;
+  padding: var(--page-padding);
   max-width: 800px;
   margin: 0 auto;
 }

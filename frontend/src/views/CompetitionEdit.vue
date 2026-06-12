@@ -228,7 +228,7 @@ watch(
 
 <style scoped>
 .edit-container {
-  padding: 24px;
+  padding: var(--page-padding);
   max-width: 900px;
   margin: 0 auto;
 }

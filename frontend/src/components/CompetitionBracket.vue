@@ -164,7 +164,7 @@
         <span>冠军</span>
         <strong>{{ bracketChampion?.name || '待决出' }}</strong>
       </div>
-      <div>
+      <div v-if="bracketMeta.playerCount >= 4">
         <span>季军</span>
         <strong>{{ bronzeWinner?.name || '待决出' }}</strong>
       </div>
@@ -681,28 +681,40 @@ const bracketTree = computed(() => {
   let lineIndex = 0
 
   if (!rounds.length) {
+    const playerY = contentTop + 24
     const champion = {
-      x: left,
-      y: contentTop,
-      width: 150,
+      x: left + boxW + 82,
+      y: playerY - 11,
+      width: 170,
       height: 62
     }
     if (bracketChampion.value) {
+      roundTitles.push({
+        key: 'title-single',
+        x: left,
+        y: 26,
+        title: '自动晋级',
+        subtitle: '当前仅 1 名已通过报名选手'
+      })
       playerNodes.push({
         key: 'single-player',
         matchKey: 'single',
         roundIndex: 0,
         x: left,
-        y: contentTop,
+        y: playerY,
         width: boxW,
         height: boxH,
         player: bracketChampion.value,
         winner: true
       })
+      lines.push({
+        key: `single-${lineIndex++}`,
+        d: `M ${left + boxW} ${playerY + boxH / 2} H ${champion.x}`
+      })
     }
     return {
-      width: 420,
-      height: 220,
+      width: champion.x + champion.width + 24,
+      height: 190,
       lines,
       playerNodes,
       roundTitles,
@@ -1104,6 +1116,7 @@ const handleNodeMenuAction = (action) => {
 }
 .tree-svg {
   min-width: 100%;
+  max-width: none;
   display: block;
 }
 .tree-line {
@@ -1247,7 +1260,7 @@ const handleNodeMenuAction = (action) => {
 }
 .bracket-summary {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   margin-top: 16px;
 }

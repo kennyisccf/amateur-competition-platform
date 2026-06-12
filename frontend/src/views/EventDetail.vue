@@ -63,10 +63,34 @@
         />
       </div>
 
-      <div class="register-card" v-if="canRegister">
-        <h3>立即报名</h3>
-        <el-button type="primary" style="width: 100%" @click="goToRegister">
+      <div class="register-card">
+        <h3>报名状态</h3>
+        <el-tag :type="registrationPanel.type" effect="light">
+          {{ registrationPanel.title }}
+        </el-tag>
+        <p class="register-tip">{{ registrationPanel.desc }}</p>
+        <el-button v-if="showRegisterButton" type="primary" style="width: 100%" @click="goToRegister">
           我要报名
+        </el-button>
+        <el-button v-else-if="!isLoggedIn" type="primary" style="width: 100%" @click="router.push('/login')">
+          登录后报名
+        </el-button>
+        <el-button
+          v-if="currentRegistration?.canCancel"
+          type="danger"
+          plain
+          style="width: 100%; margin-top: 10px; margin-left: 0"
+          @click="cancelMyRegistration"
+        >
+          取消报名
+        </el-button>
+        <el-button
+          v-if="currentRegistration"
+          plain
+          style="width: 100%; margin-top: 10px; margin-left: 0"
+          @click="router.push('/profile')"
+        >
+          查看我的报名
         </el-button>
       </div>
     </div>
@@ -76,7 +100,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Clock, Location, Medal, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import CompetitionBracket from '@/components/CompetitionBracket.vue'
@@ -88,17 +112,72 @@ const loading = ref(true)
 const competitionData = ref({})
 const bracketRegistrations = ref([])
 const bracketState = ref({ drawSeed: Date.now(), winners: {} })
+const currentRegistration = ref(null)
 const userRole = localStorage.getItem('role')
-const canRegister = computed(() =>
-  competitionData.value.status === 1 && (
-    ['PLAYER', 'ADMIN'].includes(userRole) ||
-    (
-      userRole === 'ORGANIZER' &&
-      competitionData.value.type === 'PRIVATE' &&
-      competitionData.value.can_manage
-    )
+const isLoggedIn = computed(() => Boolean(localStorage.getItem('user_id')))
+const isFull = computed(() =>
+  Number(competitionData.value.current_participants || 0) >= Number(competitionData.value.max_participants || 0)
+)
+const canCurrentRoleRegister = computed(() =>
+  userRole === 'PLAYER' ||
+  (
+    userRole === 'ORGANIZER' &&
+    competitionData.value.type === 'PRIVATE' &&
+    competitionData.value.can_manage
   )
 )
+const showRegisterButton = computed(() =>
+  isLoggedIn.value &&
+  !currentRegistration.value &&
+  competitionData.value.status === 1 &&
+  !isFull.value &&
+  canCurrentRoleRegister.value
+)
+
+const registrationPanel = computed(() => {
+  if (currentRegistration.value) {
+    return {
+      title: currentRegistration.value.statusText,
+      desc: currentRegistration.value.desc || getRegistrationDesc(currentRegistration.value.status),
+      type: getRegistrationTagType(currentRegistration.value.status)
+    }
+  }
+  if (!isLoggedIn.value) {
+    return { title: '未登录', desc: '登录后可以提交报名申请，并在个人档案查看审核进度。', type: 'info' }
+  }
+  if (!canCurrentRoleRegister.value) {
+    return { title: '不可报名', desc: '当前身份不能直接报名该赛事，可在管理端维护报名名单。', type: 'info' }
+  }
+  if (competitionData.value.status !== 1) {
+    return { title: getCompetitionStatusText(competitionData.value.status), desc: '该赛事当前不接受新的报名申请。', type: 'info' }
+  }
+  if (isFull.value) {
+    return { title: '名额已满', desc: '报名人数已达到上限，可联系主办方确认是否扩容。', type: 'warning' }
+  }
+  return { title: '可以报名', desc: '提交后由主办方或管理员审核，通过后会进入赛程名单。', type: 'success' }
+})
+
+const getRegistrationDesc = (status) => ({
+  processing: '报名申请已提交，等待主办方审核。',
+  ongoing: '报名已通过，请留意赛程安排。',
+  rejected: '报名未通过，可查看审核备注或联系主办方。',
+  finished: '赛事已完赛，成绩会展示在个人档案。'
+}[status] || '报名记录已生成。')
+
+const getRegistrationTagType = (status) => ({
+  processing: 'warning',
+  ongoing: 'success',
+  rejected: 'danger',
+  finished: 'info'
+}[status] || 'info')
+
+const getCompetitionStatusText = (status) => ({
+  0: '待审核',
+  1: '报名中',
+  2: '进行中',
+  3: '已结束',
+  4: '已驳回'
+}[status] || '状态未知')
 
 // 日期格式化
 const formatDate = (dateStr) => {
@@ -120,13 +199,13 @@ const loadCompetitionDetail = async () => {
     if (res.data.success) {
       competitionData.value = res.data.data
       await loadCompetitionBracket(competitionId)
+      await loadMyRegistrationStatus(competitionId)
       loading.value = false
     } else {
       ElMessage.error('获取赛事详情失败')
     }
   } catch (err) {
     ElMessage.error('请求失败，请检查后端服务')
-    console.error(err)
   }
 }
 
@@ -142,9 +221,51 @@ const loadCompetitionBracket = async (competitionId) => {
   }
 }
 
+const loadMyRegistrationStatus = async (competitionId) => {
+  currentRegistration.value = null
+  if (!isLoggedIn.value) return
+  try {
+    const res = await request.get('/api/my_registrations/')
+    if (res.data.success) {
+      currentRegistration.value = (res.data.data || []).find(
+        item => String(item.competitionId) === String(competitionId)
+      ) || null
+    }
+  } catch (err) {
+    currentRegistration.value = null
+  }
+}
+
 // 跳转到报名页
 const goToRegister = () => {
   router.push(`/event-register/${competitionData.value.id}`)
+}
+
+const cancelMyRegistration = async () => {
+  if (!currentRegistration.value) return
+  try {
+    await ElMessageBox.confirm('确定取消该赛事报名吗？', '取消报名', {
+      confirmButtonText: '确定取消',
+      cancelButtonText: '再想想',
+      type: 'warning'
+    })
+    const csrfRes = await request.get('/csrf/')
+    const res = await request.post(
+      '/api/cancel_registration/',
+      { registration_id: currentRegistration.value.id },
+      { headers: { 'X-CSRFToken': csrfRes.data.csrfToken } }
+    )
+    if (res.data.success) {
+      ElMessage.success('已取消报名')
+      await loadCompetitionDetail()
+    } else {
+      ElMessage.error(res.data.msg || '取消报名失败')
+    }
+  } catch (err) {
+    if (!['cancel', 'close'].includes(err)) {
+      ElMessage.error('取消报名失败')
+    }
+  }
 }
 
 onMounted(() => {
@@ -154,7 +275,9 @@ onMounted(() => {
 
 <style scoped>
 .event-detail-container {
-  padding: 24px;
+  min-height: 100%;
+  padding: var(--page-padding);
+  background: #f5f7fa;
 }
 .loading {
   text-align: center;
@@ -163,19 +286,25 @@ onMounted(() => {
   color: #666;
 }
 .detail-content {
-  display: flex;
-  gap: 24px;
+  width: 100%;
+  max-width: min(1500px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 23vw, 360px);
+  gap: clamp(16px, 1.8vw, 24px);
+  align-items: start;
 }
 .detail-card {
-  flex: 2;
+  min-width: 0;
   background: white;
-  padding: 24px;
+  padding: clamp(18px, 1.8vw, 26px);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  overflow: hidden;
 }
 .detail-cover {
   width: 100%;
-  height: clamp(150px, 17vw, 230px);
+  height: clamp(160px, 20vw, 260px);
   margin: 0 0 18px;
   border-radius: 8px;
   overflow: hidden;
@@ -247,9 +376,11 @@ onMounted(() => {
   color: #faad14;
 }
 .register-card {
-  flex: 1;
+  position: sticky;
+  top: var(--page-padding);
+  min-width: 0;
   background: white;
-  padding: 24px;
+  padding: clamp(18px, 1.8vw, 24px);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
   height: fit-content;
@@ -259,5 +390,31 @@ onMounted(() => {
   font-size: 16px;
   border-left: 3px solid #1677ff;
   padding-left: 12px;
+}
+.register-tip {
+  margin: 14px 0 18px;
+  color: #667085;
+  line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  .detail-content {
+    grid-template-columns: 1fr;
+  }
+
+  .register-card {
+    position: static;
+    width: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .event-detail-container {
+    padding: 16px;
+  }
+
+  .detail-card h1 {
+    font-size: 22px;
+  }
 }
 </style>

@@ -738,7 +738,10 @@ onMounted(async () => {
 
 <style scoped>
 .admin-container {
-  padding: 24px;
+  width: 100%;
+  max-width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: var(--page-padding);
 }
 .role-strip {
   display: flex;

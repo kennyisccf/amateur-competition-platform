@@ -227,11 +227,14 @@ onMounted(() => {
 
 <style scoped>
 .profile-container {
-  padding: 24px;
+  width: 100%;
+  max-width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: var(--page-padding);
 }
 .profile-content {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 24px;
   margin-top: 24px;
 }
@@ -408,5 +411,22 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .profile-content {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .timeline-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 </style>
