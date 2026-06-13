@@ -183,12 +183,12 @@ INSERT INTO `user` (`id`, `username`, `user_code`, `password`, `role`, `nickname
 -- 赛事数据 (覆盖全状态: 0待审, 1报名, 2进行, 3结束, 4驳回)
 INSERT INTO `competition`
 (`id`, `competition_no`, `title`, `category`, `location`, `description`, `type`, `organizer_id`, `status`, `max_participants`, `current_participants`, `reward_points`, `reward`, `competition_format`, `group_count`, `start_time`, `end_time`, `invite_code`, `reject_reason`, `thumbnail_url`) VALUES
-(1, 'NO.00000001', '正在招募的羽毛球赛', '羽毛球', '市体育馆', '面向校园羽毛球爱好者的公开招募赛事', 'PUBLIC', 2, 1, 32, 0, 100, '冠军奖牌与100积分', 'SINGLE_ELIMINATION', 0, '2026-06-20 09:00:00', '2026-06-20 18:00:00', NULL, NULL, '/default-thumbnails/badminton.png'),
+(1, 'NO.00000001', '正在招募的羽毛球赛', '羽毛球', '市体育馆', '面向校园羽毛球爱好者的公开招募赛事', 'PUBLIC', 2, 1, 32, 0, 100, '冠军奖牌与100积分', 'SINGLE_ELIMINATION', 0, '2026-06-24 09:00:00', '2026-06-24 18:00:00', NULL, NULL, '/default-thumbnails/badminton.png'),
 (2, 'NO.00000002', '待审核的篮球赛', '篮球', '大学球场', '等待平台管理员审核的篮球赛事', 'PUBLIC', 2, 0, 16, 0, 100, '冠军奖杯', 'SINGLE_ELIMINATION', 0, '2026-07-01 10:00:00', '2026-07-02 18:00:00', NULL, NULL, '/default-thumbnails/basketball.png'),
 (3, 'NO.00000003', '已结束的电竞周赛', '电竞', '线上', '用于演示历史成绩与积分记录的已结束赛事', 'PUBLIC', 2, 3, 16, 1, 200, '冠军200积分', 'SINGLE_ELIMINATION', 0, '2026-05-01 20:00:00', '2026-05-01 23:00:00', NULL, NULL, '/default-thumbnails/esports.png'),
 (4, 'NO.00000004', '被驳回的棋牌聚会', '棋牌桌游', '茶室', '用于演示赛事审核驳回状态', 'PUBLIC', 2, 4, 20, 0, 50, '参与纪念品', 'SINGLE_ELIMINATION', 0, '2026-08-01 14:00:00', '2026-08-01 18:00:00', NULL, '赛事描述过于简单', '/default-thumbnails/boardgame.png'),
-(5, 'NO.00000005', '校内私人羽毛球友谊赛', '羽毛球', '校内体育馆', '需要邀请码报名的校内私人赛事', 'PRIVATE', 2, 1, 8, 0, 0, '私人友谊赛无积分', 'SINGLE_ELIMINATION', 0, '2026-06-15 14:00:00', '2026-06-15 18:00:00', 'LESAI6', NULL, '/default-thumbnails/badminton.png'),
-(6, 'NO.00000006', '正在进行的足球赛', '足球', '大学足球场', '用于演示开赛后录入成绩与结束赛事', 'PUBLIC', 2, 2, 22, 1, 150, '冠军150积分', 'SINGLE_ELIMINATION', 0, '2026-06-13 09:00:00', '2026-06-14 18:00:00', NULL, NULL, '/default-thumbnails/football.png');
+(5, 'NO.00000005', '校内私人羽毛球友谊赛', '羽毛球', '校内体育馆', '需要邀请码报名的校内私人赛事', 'PRIVATE', 2, 1, 8, 0, 0, '私人友谊赛无积分', 'SINGLE_ELIMINATION', 0, '2026-06-26 14:00:00', '2026-06-26 18:00:00', 'LESAI6', NULL, '/default-thumbnails/badminton.png'),
+(6, 'NO.00000006', '正在进行的足球赛', '足球', '大学足球场', '用于演示开赛后录入成绩与结束赛事', 'PUBLIC', 2, 2, 22, 1, 150, '冠军150积分', 'SINGLE_ELIMINATION', 0, '2026-06-21 09:00:00', '2026-06-23 18:00:00', NULL, NULL, '/default-thumbnails/football.png');
 
 -- 报名数据 (招募中的羽毛球赛不预置报名，避免无人报名时显示示例选手)
 INSERT INTO `registration`
@@ -215,7 +215,7 @@ INSERT INTO `friend_relation` (`requester_id`, `addressee_id`, `status`) VALUES
 (5, 3, 'pending');
 
 INSERT INTO `friend_message` (`sender_id`, `receiver_id`, `content`, `is_read`) VALUES
-(3, 4, '明天羽毛球赛要不要一起组队？', 0),
+(3, 4, '这场羽毛球赛要不要一起组队？', 0),
 (4, 3, '可以，我晚点看一下报名信息。', 1);
 
 SET FOREIGN_KEY_CHECKS = 1;
