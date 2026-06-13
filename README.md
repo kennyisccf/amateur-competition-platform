@@ -25,6 +25,17 @@
 | 数据库 | MySQL 8.0、utf8mb4、InnoDB |
 | 静态资源 | 默认赛事缩图、本地上传缩图、登录/注册背景图 |
 
+## 团队成员与分工
+
+| 成员 | GitHub | 主要职责 | 工作内容 |
+| --- | --- | --- | --- |
+| 张振丰 | @kennyisccf | 项目经理 / 产品经理 / 前端协助 | 负责项目整体规划、需求收敛、演示流程设计、产品体验打磨、赛事大厅与详情页体验优化、最终文档与展示材料整合 |
+| 陈俊皓 | @eric3685 | 技术负责人 / 文档工程师 | 负责技术路线梳理、架构文档、接口与状态流转说明、部分后端逻辑协助、项目交付文档维护 |
+| 张二思 | @zhangers324 | 前端主开发 | 负责 Vue 页面开发、路由与布局、赛事大厅、赛事详情、报名管理、淘汰树组件和响应式页面适配 |
+| 董祉含 | @dzh0628 | 后端主开发 | 负责 Django API、用户登录注册、赛事与报名接口、权限校验、赛程状态保存和数据库模型对接 |
+| 路良钧 | @toki-xinyue | 数据库负责 / 测试负责人 | 负责 MySQL 表结构、初始化脚本、演示数据、数据库升级脚本、功能测试与边界测试整理 |
+| 李峻安 | @lja1872 | UI 设计师 / 前端样式协助 | 负责界面视觉规范、赛事缩图风格、页面布局美化、登录注册背景、卡片和后台页面视觉统一 |
+
 ## 核心功能
 
 ### 参赛者
@@ -74,7 +85,58 @@
 | [演示指南](docs/demo-guide.md) | 课堂展示账号、流程和重点说明 |
 | [文档审查](docs/documentation-audit.md) | 已有文档盘点与最终文档说明 |
 
-## 快速启动
+## 完整执行指南
+
+以下步骤用于从数据库到前后端完整运行项目。若已在本机配置好环境，也可以直接从第 4 步启动。
+
+### 1. 克隆或进入项目
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程"
+git clone https://github.com/kennyisccf/amateur-competition-platform.git amateur-competition-platform-git
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+```
+
+如果本机已经有项目：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+git status --short
+```
+
+### 2. 初始化数据库
+
+数据库使用 MySQL 8.0，数据库名为 `lesai_db`，字符集为 `utf8mb4`。
+
+本机数据库初始化命令：
+
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\lesai.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4"
+```
+
+如果数据库已存在，只需要执行升级脚本：
+
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\upgrade_registration_fields.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4" lesai_db
+```
+
+### 3. 安装依赖
+
+后端依赖：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
+```
+
+前端依赖：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd install
+```
+
+### 4. 启动后端
 
 后端：
 
@@ -83,7 +145,15 @@ cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-前端：
+后端默认地址：
+
+```text
+http://localhost:8000
+```
+
+### 5. 启动前端
+
+另开一个 PowerShell：
 
 ```powershell
 cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
@@ -95,6 +165,46 @@ npm.cmd run dev
 ```text
 http://localhost:5173/
 ```
+
+### 6. 完整检查
+
+前端生产构建：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd run build
+```
+
+后端系统检查：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe manage.py check
+```
+
+Git 格式检查：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+git diff --check
+```
+
+### 7. 推荐演示流程
+
+```text
+普通用户登录 -> 赛事大厅 -> 赛事详情 -> 报名/通知/档案
+主办方登录 -> 赛事工作台 -> 报名管理 -> 批量生成参赛者 -> 抽签与淘汰树
+管理员登录 -> 审核与风控 -> 赛事审核 -> 用户管理 -> 平台统计
+```
+
+重点展示：
+
+- 赛事大厅搜索、筛选和赛事缩图。
+- 公开赛事与私人邀请码赛事。
+- 报名审核、批量生成参赛者和随机积分。
+- 单淘汰树、种子选手轮空、晋级和撤销。
+- 好友系统、消息通知和删除好友后的通知清理。
+- 管理员赛事审核、用户治理和权限边界。
 
 ## 测试账号
 
@@ -109,18 +219,24 @@ http://localhost:5173/
 | 参赛者 | `player_jane` | 普通选手 |
 | 参赛者 | `player_test` | 私人赛事测试用户 |
 
-## 最终检查命令
+## 提交与推送
 
-前端构建：
+查看修改：
 
 ```powershell
-cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
-npm.cmd run build
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+git status --short
 ```
 
-后端检查：
+提交文档或代码：
 
 ```powershell
-cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
-.\.venv\Scripts\python.exe manage.py check
+git add .
+git commit -m "docs: improve final project README"
+```
+
+推送到当前开发分支：
+
+```powershell
+git push origin dev/zzf
 ```
