@@ -118,6 +118,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { syncNotificationBadge } from '@/utils/notificationEvents'
 
 const router = useRouter()
 const loading = ref(false)
@@ -162,6 +163,7 @@ const loadMessages = async () => {
     const res = await request.get('/api/notifications/')
     if (res.data.success) {
       messages.value = res.data.messages || []
+      syncNotificationBadge(messages.value)
     } else {
       ElMessage.error(res.data.msg || '消息加载失败')
     }
@@ -214,6 +216,8 @@ const respondFriend = async (item, action) => {
     })
     if (res.data.success) {
       ElMessage.success(res.data.msg)
+      messages.value = messages.value.filter(message => message.friend_relation_id !== item.friend_relation_id)
+      syncNotificationBadge(messages.value)
       await loadMessages()
     } else {
       ElMessage.warning(res.data.msg || '处理失败')

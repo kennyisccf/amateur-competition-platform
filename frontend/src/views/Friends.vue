@@ -211,6 +211,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import { notifyNotificationsChanged } from '@/utils/notificationEvents'
 
 const route = useRoute()
 const loading = ref(false)
@@ -366,6 +367,7 @@ const respondRequest = async (item, action) => {
       ElMessage.success(res.data.msg)
       await loadFriends()
       if (searched.value) await searchUsers()
+      notifyNotificationsChanged()
     } else {
       ElMessage.warning(res.data.msg || '处理失败')
     }
@@ -384,6 +386,7 @@ const openChat = async (item) => {
       chatMessages.value = res.data.messages || []
       await loadFriends()
       await scrollMessagesToBottom()
+      notifyNotificationsChanged()
     } else {
       ElMessage.warning(res.data.msg || '聊天记录加载失败')
     }

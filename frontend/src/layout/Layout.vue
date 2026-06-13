@@ -99,11 +99,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell, ChatDotRound, List, Plus, Setting, Tools, Trophy, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import {
+  getUnreadNotificationCount,
+  NOTIFICATION_REFRESH_EVENT,
+  NOTIFICATION_SYNC_EVENT
+} from '@/utils/notificationEvents'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,17 +124,29 @@ const activeMenu = computed(() => {
 })
 
 const refreshNotificationBadge = async () => {
-  if (!localStorage.getItem('user_id')) return
+  if (!localStorage.getItem('user_id')) {
+    notificationBadge.value = 0
+    return
+  }
   try {
     const res = await request.get('/api/notifications/')
     if (res.data.success) {
-      notificationBadge.value = (res.data.messages || []).filter(item =>
-        item.action_required || String(item.type || '') === '好友消息'
-      ).length
+      notificationBadge.value = getUnreadNotificationCount(res.data.messages || [])
     }
   } catch (err) {
     notificationBadge.value = 0
   }
+}
+
+const syncNotificationBadge = (event) => {
+  const count = event?.detail?.count
+  if (Number.isFinite(count)) {
+    notificationBadge.value = count
+  }
+}
+
+const refreshWhenVisible = () => {
+  if (!document.hidden) refreshNotificationBadge()
 }
 
 const handleLogout = () => {
@@ -161,12 +178,25 @@ const handleLogout = () => {
 onMounted(() => {
   userRole.value = localStorage.getItem('role') || ''
   refreshNotificationBadge()
-  badgeTimer = window.setInterval(refreshNotificationBadge, 60000)
+  window.addEventListener(NOTIFICATION_REFRESH_EVENT, refreshNotificationBadge)
+  window.addEventListener(NOTIFICATION_SYNC_EVENT, syncNotificationBadge)
+  window.addEventListener('focus', refreshNotificationBadge)
+  document.addEventListener('visibilitychange', refreshWhenVisible)
+  badgeTimer = window.setInterval(refreshNotificationBadge, 10000)
 })
 
 onUnmounted(() => {
   if (badgeTimer) window.clearInterval(badgeTimer)
+  window.removeEventListener(NOTIFICATION_REFRESH_EVENT, refreshNotificationBadge)
+  window.removeEventListener(NOTIFICATION_SYNC_EVENT, syncNotificationBadge)
+  window.removeEventListener('focus', refreshNotificationBadge)
+  document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
+
+watch(
+  () => route.fullPath,
+  () => refreshNotificationBadge()
+)
 </script>
 
 <style scoped>
