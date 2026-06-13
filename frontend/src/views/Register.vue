@@ -1,5 +1,6 @@
 <template>
   <div class="register-container">
+    <AuthBackground />
     <div class="register-left">
       <h1>乐赛</h1>
       <p>一站式服务平台 · 精彩有你</p>
@@ -75,6 +76,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AuthBackground from '@/components/AuthBackground.vue'
 import request from '@/utils/request'
 
 const router = useRouter()
@@ -140,29 +142,36 @@ const handleRegister = async () => {
     }
   } catch (err) {
     ElMessage.error('请求失败，请检查后端服务是否启动')
-    console.error(err)
   }
 }
 </script>
 
 <style scoped>
 .register-container {
+  position: relative;
   display: flex;
-  height: 100vh;
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  min-height: 100dvh;
   align-items: center;
   justify-content: space-around;
-  padding: 0 10%;
+  gap: clamp(32px, 6vw, 92px);
+  padding: clamp(32px, 7vw, 96px) clamp(24px, 8vw, 128px);
+  overflow: hidden;
+  background: #081c3a;
 }
 .register-left {
+  position: relative;
+  z-index: 1;
   color: white;
+  max-width: 480px;
 }
 .register-left h1 {
-  font-size: 48px;
+  font-size: clamp(42px, 5vw, 68px);
   margin: 0 0 12px;
+  color: #fff;
+  font-weight: 800;
 }
 .register-left p {
-  font-size: 20px;
+  font-size: clamp(18px, 2vw, 24px);
   opacity: 0.9;
   margin: 0 0 24px;
 }
@@ -172,20 +181,28 @@ const handleRegister = async () => {
 }
 .tags span {
   padding: 6px 16px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 20px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 999px;
   font-size: 14px;
+  backdrop-filter: blur(10px);
 }
 .register-form-card {
-  background: white;
-  padding: 32px;
-  border-radius: 12px;
-  width: 360px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.92);
+  padding: clamp(26px, 3vw, 36px);
+  border: 1px solid rgba(255,255,255,0.58);
+  border-radius: 14px;
+  width: min(400px, 100%);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+  backdrop-filter: blur(18px);
 }
 .register-form-card h2 {
   margin: 0 0 8px;
   font-size: 24px;
+  font-weight: 800;
+  color: #10233f;
 }
 .register-form-card p {
   color: #666;
@@ -219,5 +236,27 @@ const handleRegister = async () => {
 .form-footer span a {
   color: #1677ff;
   text-decoration: none;
+}
+
+@media (max-width: 860px) {
+  .register-container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+  }
+
+  .register-left {
+    max-width: none;
+    text-align: center;
+  }
+
+  .tags {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .register-form-card {
+    margin: 0 auto;
+  }
 }
 </style>

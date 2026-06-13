@@ -18,7 +18,9 @@ request.interceptors.response.use(
             localStorage.removeItem('username')
             localStorage.removeItem('is_super_admin')
             if (window.location.pathname !== '/login') {
-                window.location.href = '/login'
+                const currentPath = `${window.location.pathname}${window.location.search}`
+                const redirect = currentPath ? `?redirect=${encodeURIComponent(currentPath)}` : ''
+                window.location.href = `/login${redirect}`
             }
         }
         return Promise.reject(error)

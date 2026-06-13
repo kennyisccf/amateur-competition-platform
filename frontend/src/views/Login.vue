@@ -1,5 +1,6 @@
 <template>
   <div class="login-container">
+    <AuthBackground />
     <div class="login-left">
       <h1>乐赛</h1>
       <p>一站式服务平台 · 精彩有你</p>
@@ -57,9 +58,11 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AuthBackground from '@/components/AuthBackground.vue'
 import request from '@/utils/request'
+const route = useRoute()
 const router = useRouter()
 
 const form = ref({
@@ -70,6 +73,14 @@ const form = ref({
 const captchaCode = ref('')
 const captchaLoading = ref(false)
 
+const getSafeRedirectPath = () => {
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
+  }
+  return '/home'
+}
+
 const loadCaptcha = async () => {
   captchaLoading.value = true
   try {
@@ -78,7 +89,6 @@ const loadCaptcha = async () => {
     form.value.captcha = ''
   } catch (err) {
     captchaCode.value = '重试'
-    console.error(err)
   } finally {
     captchaLoading.value = false
   }
@@ -118,7 +128,7 @@ const handleLogin = async () => {
       localStorage.setItem('role', res.data.role)
       localStorage.setItem('is_super_admin', res.data.is_super_admin ? '1' : '0')
       
-      router.push('/home')
+      router.push(getSafeRedirectPath())
       // if (res.data.role === 'PLAYER') {
         // router.push('/home')
       // } else if (res.data.role === 'ORGANIZER') {
@@ -132,33 +142,42 @@ const handleLogin = async () => {
     }
   }
   catch (err) {
-    console.error(err)
     ElMessage.error(err.response?.data?.msg || '请求失败，请检查后端服务')
     loadCaptcha()
   }
 }
 
-onMounted(loadCaptcha)
+onMounted(() => {
+  loadCaptcha()
+})
 </script>
 
 <style scoped>
 .login-container {
+  position: relative;
   display: flex;
-  height: 100vh;
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  min-height: 100dvh;
   align-items: center;
   justify-content: space-around;
-  padding: 0 10%;
+  gap: clamp(32px, 6vw, 92px);
+  padding: clamp(32px, 7vw, 96px) clamp(24px, 8vw, 128px);
+  overflow: hidden;
+  background: #081c3a;
 }
 .login-left {
+  position: relative;
+  z-index: 1;
   color: white;
+  max-width: 480px;
 }
 .login-left h1 {
-  font-size: 48px;
+  font-size: clamp(42px, 5vw, 68px);
   margin: 0 0 12px;
+  color: #fff;
+  font-weight: 800;
 }
 .login-left p {
-  font-size: 20px;
+  font-size: clamp(18px, 2vw, 24px);
   opacity: 0.9;
   margin: 0 0 24px;
 }
@@ -168,20 +187,28 @@ onMounted(loadCaptcha)
 }
 .tags span {
   padding: 6px 16px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 20px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 999px;
   font-size: 14px;
+  backdrop-filter: blur(10px);
 }
 .login-form-card {
-  background: white;
-  padding: 32px;
-  border-radius: 12px;
-  width: 360px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.92);
+  padding: clamp(26px, 3vw, 36px);
+  border: 1px solid rgba(255,255,255,0.58);
+  border-radius: 14px;
+  width: min(380px, 100%);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+  backdrop-filter: blur(18px);
 }
 .login-form-card h2 {
   margin: 0 0 8px;
   font-size: 24px;
+  font-weight: 800;
+  color: #10233f;
 }
 .login-form-card p {
   color: #666;
@@ -237,4 +264,27 @@ onMounted(loadCaptcha)
   color: #1677ff;
   text-decoration: none;
 }
+
+@media (max-width: 860px) {
+  .login-container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+  }
+
+  .login-left {
+    max-width: none;
+    text-align: center;
+  }
+
+  .tags {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .login-form-card {
+    margin: 0 auto;
+  }
+}
+
 </style>

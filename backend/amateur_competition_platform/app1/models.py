@@ -7,6 +7,7 @@ from django.db import models
 
 class User(models.Model):
     username = models.CharField(max_length=50)
+    user_code = models.CharField(max_length=20, null=True, blank=True)
     password = models.CharField(max_length=255)
     role = models.CharField(max_length=20)
     nickname = models.CharField(max_length=50, null=True, blank=True)
@@ -14,6 +15,7 @@ class User(models.Model):
     points = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+    allow_friend_requests = models.BooleanField(default=True)
     class Meta:
         db_table = 'user'
         managed = False
@@ -40,6 +42,7 @@ class Competition(models.Model):
     invite_code = models.CharField(max_length=50, null=True, blank=True)
     reject_reason = models.CharField( max_length=255,null=True,blank=True)
     bracket_state = models.TextField(default='', null=True, blank=True)
+    thumbnail_url = models.CharField(max_length=500, default='', null=True, blank=True)
     class Meta:
         db_table = 'competition'
         managed = False
@@ -94,4 +97,28 @@ class AuditRecord(models.Model):
 
     class Meta:
         db_table = "audit_record"
+        managed = False
+
+
+class FriendRelation(models.Model):
+    requester = models.ForeignKey(User, on_delete=models.CASCADE, db_column="requester_id", related_name="+")
+    addressee = models.ForeignKey(User, on_delete=models.CASCADE, db_column="addressee_id", related_name="+")
+    status = models.CharField(max_length=20, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "friend_relation"
+        managed = False
+
+
+class FriendMessage(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, db_column="sender_id", related_name="+")
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, db_column="receiver_id", related_name="+")
+    content = models.CharField(max_length=500)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "friend_message"
         managed = False
