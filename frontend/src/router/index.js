@@ -1,18 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Layout from '../layout/Layout.vue'
-import Register from '../views/Register.vue'
-import Login from '../views/Login.vue'
-import Home from '../views/Home.vue'
-import Profile from '../views/Profile.vue'          
-import Notifications from '../views/Notifications.vue'
-import Friends from '../views/Friends.vue'
-import EventDetail from '../views/EventDetail.vue'
-import EventRegister from '../views/EventRegister.vue'
-import CreateCompetition from '../views/CreateCompetition.vue'
-import Workbench from '../views/Workbench.vue'
-import AdminReview from '../views/AdminReview.vue'
-import RegistrationManage from '../views/RegistrationManage.vue'
-import CompetitionEdit from '../views/CompetitionEdit.vue' 
+
+const Layout = () => import('../layout/Layout.vue')
+const Register = () => import('../views/Register.vue')
+const Login = () => import('../views/Login.vue')
+const Home = () => import('../views/Home.vue')
+const Profile = () => import('../views/Profile.vue')
+const Notifications = () => import('../views/Notifications.vue')
+const Friends = () => import('../views/Friends.vue')
+const EventDetail = () => import('../views/EventDetail.vue')
+const EventRegister = () => import('../views/EventRegister.vue')
+const CreateCompetition = () => import('../views/CreateCompetition.vue')
+const Workbench = () => import('../views/Workbench.vue')
+const AdminReview = () => import('../views/AdminReview.vue')
+const RegistrationManage = () => import('../views/RegistrationManage.vue')
+const CompetitionEdit = () => import('../views/CompetitionEdit.vue')
+const Forbidden = () => import('../views/Forbidden.vue')
 
 const routes = [
   {
@@ -41,8 +43,13 @@ const routes = [
       { path: 'workbench', name: 'Workbench', component: Workbench, meta: { roles: ['PLAYER', 'ORGANIZER', 'ADMIN'] } },
       { path: 'registration-manage', name: 'RegistrationManage', component: RegistrationManage, meta: { roles: ['PLAYER', 'ORGANIZER', 'ADMIN'] } },
       { path: 'competition-edit/:id', name: 'CompetitionEdit', component: CompetitionEdit, meta: { roles: ['PLAYER', 'ORGANIZER', 'ADMIN'] } },
-      { path: 'admin-review', name: 'AdminReview', component: AdminReview, meta: { roles: ['ADMIN'] } }
+      { path: 'admin-review', name: 'AdminReview', component: AdminReview, meta: { roles: ['ADMIN'] } },
+      { path: 'forbidden', name: 'Forbidden', component: Forbidden }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/home'
   }
 ]
 
@@ -57,13 +64,20 @@ router.beforeEach((to) => {
   const isPublic = to.matched.some(record => record.meta.public)
 
   if (!userId && !isPublic) {
-    return '/login'
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
   if (userId && isPublic) {
     return '/home'
   }
-  if (to.meta.roles && role !== 'ADMIN' && !to.meta.roles.includes(role)) {
-    return '/home'
+  const requiredRoles = to.matched.flatMap(record => record.meta.roles ?? [])
+  if (requiredRoles.length > 0 && role !== 'ADMIN' && !requiredRoles.includes(role)) {
+    return {
+      path: '/forbidden',
+      query: {
+        from: to.fullPath,
+        need: [...new Set(requiredRoles)].join(',')
+      }
+    }
   }
 })
 

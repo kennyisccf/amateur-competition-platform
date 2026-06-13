@@ -35,6 +35,15 @@
         用户表批量加入
       </el-button>
       <el-button
+        v-if="userRole === 'ADMIN' && canManageSelected"
+        type="danger"
+        plain
+        :disabled="selectedRegistrationIds.length === 0"
+        @click="bulkDeleteRegistrations"
+      >
+        批量删除报名
+      </el-button>
+      <el-button
         v-if="canManageSelected"
         type="info"
         plain
@@ -75,77 +84,124 @@
     <div v-else-if="registrations.length === 0 && selectedCompetitionId" class="empty-tip">
       该赛事暂无报名信息
     </div>
-    <el-table
-      v-else
-      :data="registrations"
-      border
-      stripe
-      class="registration-table"
-      style="width: 100%; margin-top: 20px;"
-    >
-      <el-table-column prop="registration_id" label="报名ID" width="100" />
-      <el-table-column prop="player_id" label="选手ID" width="100" />
-      <el-table-column prop="username" label="用户名" min-width="120" />
-      <el-table-column prop="nickname" label="选手昵称" min-width="120" />
-      <el-table-column prop="team_name" label="战队名" min-width="140" />
-      <el-table-column prop="team_members" label="选手账号" min-width="180" />
-      <el-table-column label="选手状态" width="150">
-        <template #default="scope">
-          <el-dropdown v-if="canManageSelected" trigger="click" @command="(state) => changeRegistrationStatus(scope.row, state)">
-            <el-tag
-              :type="getRegistrationState(scope.row).type"
-              effect="light"
-              class="status-tag"
-            >
+    <template v-else>
+      <div class="table-tools">
+        <el-input
+          v-model="registrationKeyword"
+          clearable
+          placeholder="搜索报名ID / 编号 / 用户名 / 昵称 / 战队"
+          class="tool-input"
+          @input="registrationPage = 1"
+        />
+        <el-select
+          v-model="registrationStatusFilter"
+          clearable
+          placeholder="选手状态"
+          class="tool-select"
+          @change="registrationPage = 1"
+        >
+          <el-option
+            v-for="item in registrationStatusOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+        <span class="table-count">
+          已选 {{ selectedRegistrationIds.length }} 人 / 筛选 {{ filteredRegistrations.length }} 人
+        </span>
+      </div>
+      <el-table
+        :data="pagedRegistrations"
+        row-key="registration_id"
+        border
+        stripe
+        class="registration-table"
+        style="width: 100%; margin-top: 14px;"
+        @selection-change="handleRegistrationSelectionChange"
+      >
+        <el-table-column
+          v-if="userRole === 'ADMIN' && canManageSelected"
+          type="selection"
+          width="48"
+          reserve-selection
+        />
+        <el-table-column prop="registration_id" label="报名ID" width="100" />
+        <el-table-column prop="player_id" label="选手ID" width="100" />
+        <el-table-column prop="username" label="用户名" min-width="120" />
+        <el-table-column prop="nickname" label="选手昵称" min-width="120" />
+        <el-table-column prop="player_points" label="当前积分" width="100" sortable />
+        <el-table-column prop="team_name" label="战队名" min-width="140" />
+        <el-table-column prop="team_members" label="选手账号" min-width="180" />
+        <el-table-column label="选手状态" width="150">
+          <template #default="scope">
+            <el-dropdown v-if="canManageSelected" trigger="click" @command="(state) => changeRegistrationStatus(scope.row, state)">
+              <el-tag
+                :type="getRegistrationState(scope.row).type"
+                effect="light"
+                class="status-tag"
+              >
+                {{ getRegistrationState(scope.row).text }}
+              </el-tag>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="item in registrationStatusOptions"
+                    :key="item.value"
+                    :command="item.value"
+                  >
+                    {{ item.label }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-tag v-else :type="getRegistrationState(scope.row).type" effect="light">
               {{ getRegistrationState(scope.row).text }}
             </el-tag>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="item in registrationStatusOptions"
-                  :key="item.value"
-                  :command="item.value"
-                >
-                  {{ item.label }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <el-tag v-else :type="getRegistrationState(scope.row).type" effect="light">
-            {{ getRegistrationState(scope.row).text }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="final_score" label="成绩" width="100" />
-      <el-table-column prop="final_rank" label="排名" width="80" />
-      <el-table-column prop="earned_points" label="获得积分" width="100" />
-      <el-table-column  prop="registration_time"  label="报名时间"  min-width="180" :formatter="formatTime"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="final_score" label="成绩" width="100" />
+        <el-table-column prop="final_rank" label="排名" width="80" />
+        <el-table-column prop="earned_points" label="获得积分" width="100" />
+        <el-table-column  prop="registration_time"  label="报名时间"  min-width="180" :formatter="formatTime"/>
 
-      <el-table-column label="操作" width="340">
-        <template #default="scope">
-          <el-button v-if="canManageSelected && scope.row.review_status===0" size="small" type="success" @click="approveRegistration(scope.row.registration_id)">
-            通过
-          </el-button>
-          <el-button v-if="canManageSelected && scope.row.review_status===0" size="small" type="danger" @click="rejectRegistration(scope.row)">
-            驳回
-          </el-button>
-          <el-button
-            v-if="canManageSelected && scope.row.review_status===1 && scope.row.status !== 'finished' && [2, 3].includes(selectedCompetition?.status)"
-            size="small"
-            type="primary"
-            @click="openResultDialog(scope.row)"
-          >
-            录入成绩
-          </el-button>
-          <el-button size="small" @click="showDetail(scope.row)">
-            详情
-          </el-button>
-          <el-button v-if="userRole === 'ADMIN' && canManageSelected" size="small" type="danger" @click="deleteRegistration(scope.row)">
-            删除报名
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+        <el-table-column label="操作" width="340">
+          <template #default="scope">
+            <el-button v-if="canManageSelected && scope.row.review_status===0" size="small" type="success" @click="approveRegistration(scope.row.registration_id)">
+              通过
+            </el-button>
+            <el-button v-if="canManageSelected && scope.row.review_status===0" size="small" type="danger" @click="rejectRegistration(scope.row)">
+              驳回
+            </el-button>
+            <el-button
+              v-if="canManageSelected && scope.row.review_status===1 && scope.row.status !== 'finished' && [2, 3].includes(selectedCompetition?.status)"
+              size="small"
+              type="primary"
+              @click="openResultDialog(scope.row)"
+            >
+              录入成绩
+            </el-button>
+            <el-button size="small" @click="showDetail(scope.row)">
+              详情
+            </el-button>
+            <el-button v-if="userRole === 'ADMIN' && canManageSelected" size="small" type="danger" @click="deleteRegistration(scope.row)">
+              删除报名
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-pagination
+        v-if="filteredRegistrations.length > registrationPageSize"
+        v-model:current-page="registrationPage"
+        v-model:page-size="registrationPageSize"
+        class="table-pagination"
+        background
+        layout="total, sizes, prev, pager, next"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="filteredRegistrations.length"
+        @size-change="registrationPage = 1"
+      />
+    </template>
   </div>
   <el-dialog v-model="detailDialogVisible" title="报名详情" width="500px">
     <el-descriptions :column="1" border>
@@ -272,8 +328,11 @@
       <el-form-item label="昵称前缀">
         <el-input v-model="bulkCreateForm.nickname_prefix" placeholder="例如 测试用户" />
       </el-form-item>
+      <el-form-item label="随机积分">
+        <el-switch v-model="bulkCreateForm.random_points" active-text="开启" inactive-text="关闭" />
+      </el-form-item>
       <div class="dialog-tip">
-        这里生成的是测试用户，登录时只需要输入用户名，不需要密码和验证码。
+        这里生成的是测试用户，登录时只需要输入用户名，不需要密码和验证码。开启随机积分后会生成 0-2000 分，方便测试种子选手。
       </div>
     </el-form>
     <template #footer>
@@ -281,22 +340,46 @@
       <el-button type="primary" @click="bulkCreateUsers">批量新增</el-button>
     </template>
   </el-dialog>
-  <el-dialog v-model="bulkJoinDialogVisible" title="从用户表批量加入赛事" width="760px">
+  <el-dialog v-model="bulkJoinDialogVisible" title="从用户表批量加入赛事" width="920px">
     <div class="dialog-tip">
-      当前赛事：{{ selectedCompetition?.competition_no || selectedCompetition?.id }} {{ selectedCompetition?.title }}
+      当前赛事：{{ selectedCompetition?.competition_no || selectedCompetition?.id }} {{ selectedCompetition?.title }}；已报名用户会自动隐藏。
+    </div>
+    <div class="table-tools compact-tools">
+      <el-input
+        v-model="bulkJoinKeyword"
+        clearable
+        placeholder="搜索编号 / 用户名 / 昵称"
+        class="tool-input"
+        @input="bulkJoinPage = 1"
+      />
+      <el-select
+        v-model="bulkJoinRoleFilter"
+        clearable
+        placeholder="角色"
+        class="tool-select"
+        @change="bulkJoinPage = 1"
+      >
+        <el-option label="参赛者" value="PLAYER" />
+        <el-option label="主办方" value="ORGANIZER" />
+      </el-select>
+      <span class="table-count">
+        已选 {{ bulkSelectedUserIds.length }} 人 / 可加入 {{ filteredJoinableUsers.length }} 人
+      </span>
     </div>
     <el-table
-      :data="joinableUsers"
+      :data="pagedJoinableUsers"
+      row-key="user_id"
       border
       height="360"
       @selection-change="handleBulkUserSelectionChange"
     >
-      <el-table-column type="selection" width="48" />
+      <el-table-column type="selection" width="48" reserve-selection />
       <el-table-column prop="user_id" label="ID" width="80" />
       <el-table-column prop="user_code" label="编号" width="110" />
       <el-table-column prop="username" label="用户名" min-width="140" />
       <el-table-column prop="nickname" label="昵称" min-width="140" />
       <el-table-column prop="role" label="角色" width="120" />
+      <el-table-column prop="points" label="积分" width="100" sortable />
       <el-table-column label="状态" width="100">
         <template #default="scope">
           <el-tag :type="scope.row.is_active ? 'success' : 'danger'">
@@ -305,6 +388,17 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      v-if="filteredJoinableUsers.length > bulkJoinPageSize"
+      v-model:current-page="bulkJoinPage"
+      v-model:page-size="bulkJoinPageSize"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :page-sizes="[10, 20, 50, 100]"
+      :total="filteredJoinableUsers.length"
+      @size-change="bulkJoinPage = 1"
+    />
     <template #footer>
       <el-button @click="bulkJoinDialogVisible = false">取消</el-button>
       <el-button type="primary" :disabled="bulkSelectedUserIds.length === 0" @click="bulkJoinUsers">
@@ -368,6 +462,15 @@ const isSuperAdmin = ref(localStorage.getItem('is_super_admin') === '1')
 const bracketState = ref({ drawSeed: Date.now(), winners: {}, seedIds: [], seedMode: 'AUTO' })
 const userList = ref([])
 const bulkSelectedUserIds = ref([])
+const selectedRegistrationIds = ref([])
+const registrationKeyword = ref('')
+const registrationStatusFilter = ref('')
+const registrationPage = ref(1)
+const registrationPageSize = ref(20)
+const bulkJoinKeyword = ref('')
+const bulkJoinRoleFilter = ref('')
+const bulkJoinPage = ref(1)
+const bulkJoinPageSize = ref(20)
 
 const detailDialogVisible = ref(false)
 const currentRegistration = ref({})
@@ -396,7 +499,8 @@ const bulkCreateForm = ref({
   prefix: 'player_auto_',
   count: 8,
   role: 'PLAYER',
-  nickname_prefix: '测试用户'
+  nickname_prefix: '测试用户',
+  random_points: true
 })
 const selectedCompetition = computed(() =>
   myCompetitions.value.find(item => item.id === selectedCompetitionId.value)
@@ -436,9 +540,51 @@ const autoSeedPreview = computed(() =>
     .map((item, index) => `S${index + 1} ${item.team_name || item.nickname || item.username}`)
     .join('，')
 )
-const joinableUsers = computed(() =>
-  userList.value.filter(item => item.is_active && item.role_code !== 'ADMIN')
+const registeredPlayerIds = computed(() =>
+  new Set(registrations.value.map(item => Number(item.player_id)))
 )
+const joinableUsers = computed(() =>
+  userList.value.filter(item =>
+    item.is_active &&
+    item.role_code !== 'ADMIN' &&
+    !registeredPlayerIds.value.has(Number(item.user_id))
+  )
+)
+const filterUserByKeyword = (item, keyword) => {
+  if (!keyword) return true
+  return [
+    item.user_code,
+    item.username,
+    item.nickname,
+    item.email,
+    item.team_name,
+    item.team_members,
+    item.registration_id,
+    item.player_id
+  ].some(value => String(value || '').toLowerCase().includes(keyword))
+}
+const filteredJoinableUsers = computed(() => {
+  const keyword = bulkJoinKeyword.value.trim().toLowerCase()
+  return joinableUsers.value.filter(item =>
+    filterUserByKeyword(item, keyword) &&
+    (!bulkJoinRoleFilter.value || item.role_code === bulkJoinRoleFilter.value)
+  )
+})
+const pagedJoinableUsers = computed(() => {
+  const start = (bulkJoinPage.value - 1) * bulkJoinPageSize.value
+  return filteredJoinableUsers.value.slice(start, start + bulkJoinPageSize.value)
+})
+const filteredRegistrations = computed(() => {
+  const keyword = registrationKeyword.value.trim().toLowerCase()
+  return registrations.value.filter(item =>
+    filterUserByKeyword(item, keyword) &&
+    (!registrationStatusFilter.value || getRegistrationState(item).value === registrationStatusFilter.value)
+  )
+})
+const pagedRegistrations = computed(() => {
+  const start = (registrationPage.value - 1) * registrationPageSize.value
+  return filteredRegistrations.value.slice(start, start + registrationPageSize.value)
+})
 const registrationStatusOptions = [
   { value: 'pending', label: '待审核', type: 'warning' },
   { value: 'approved', label: '已通过', type: 'success' },
@@ -547,6 +693,8 @@ const fetchMyCompetitions = async () => {
 const fetchRegistrations = async () => {
   if (!selectedCompetitionId.value) return
   registrations.value = []
+  selectedRegistrationIds.value = []
+  registrationPage.value = 1
   bracketState.value = { drawSeed: Date.now(), winners: {}, seedIds: [], seedMode: 'AUTO' }
   loading.value = true
   try {
@@ -712,7 +860,8 @@ const openBulkCreateDialog = () => {
     prefix: 'player_auto_',
     count: 8,
     role: 'PLAYER',
-    nickname_prefix: '测试用户'
+    nickname_prefix: '测试用户',
+    random_points: true
   }
   bulkCreateDialogVisible.value = true
 }
@@ -723,6 +872,9 @@ const openBulkJoinDialog = async () => {
   }
   await fetchUsers()
   bulkSelectedUserIds.value = []
+  bulkJoinKeyword.value = ''
+  bulkJoinRoleFilter.value = ''
+  bulkJoinPage.value = 1
   bulkJoinDialogVisible.value = true
 }
 const seedOptionLabel = (row) => {
@@ -760,6 +912,9 @@ const clearSeedSettings = async () => {
 }
 const handleBulkUserSelectionChange = (selection) => {
   bulkSelectedUserIds.value = selection.map(item => item.user_id)
+}
+const handleRegistrationSelectionChange = (selection) => {
+  selectedRegistrationIds.value = selection.map(item => item.registration_id)
 }
 const openResultDialog = (row) => {
   resultRegistration.value = row
@@ -893,6 +1048,36 @@ const bulkJoinUsers = async () => {
   }
 }
 
+const bulkDeleteRegistrations = async () => {
+  if (!selectedRegistrationIds.value.length) {
+    ElMessage.warning('请先勾选要删除的报名记录')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRegistrationIds.value.length} 条报名记录吗？已通过报名会同步扣减赛事人数。`,
+      '批量删除报名',
+      { type: 'warning' }
+    )
+    const headers = await getHeaders()
+    const res = await request.post('/api/admin/registrations/bulk_delete/', {
+      registration_ids: selectedRegistrationIds.value
+    }, { headers })
+    if (res.data.success) {
+      ElMessage.success(res.data.msg || '批量删除成功')
+      selectedRegistrationIds.value = []
+      fetchRegistrations()
+      fetchMyCompetitions()
+    } else {
+      ElMessage.error(res.data.msg || '批量删除失败')
+    }
+  } catch (err) {
+    if (!['cancel', 'close'].includes(err)) {
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
 const deleteRegistration = async (row) => {
   try {
     await ElMessageBox.confirm(
@@ -903,6 +1088,7 @@ const deleteRegistration = async (row) => {
     const res = await request.delete(`/api/admin/registrations/${row.registration_id}/delete/`)
     if (res.data.success) {
       ElMessage.success(res.data.msg)
+      selectedRegistrationIds.value = []
       fetchRegistrations()
       fetchMyCompetitions()
     } else {
@@ -942,6 +1128,31 @@ onMounted(async () => {
 .registration-table {
   border-radius: 8px;
   overflow: hidden;
+}
+.table-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.compact-tools {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+.tool-input {
+  width: min(320px, 100%);
+}
+.tool-select {
+  width: 150px;
+}
+.table-count {
+  color: #667085;
+  font-size: 13px;
+}
+.table-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 .dialog-tip {
   margin-bottom: 12px;

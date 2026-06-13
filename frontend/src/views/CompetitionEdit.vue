@@ -174,7 +174,6 @@ const loadCompetition = async () => {
     }
   } catch (err) {
     ElMessage.error('加载赛事信息失败')
-    console.error(err)
   }
 }
 

@@ -259,6 +259,16 @@ def is_auto_login_test_user(user):
     email = (user.email or "").lower()
     return bool(user and user.role != "ADMIN" and email.endswith("@lesai.test"))
 
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+def random_test_points():
+    return random.randint(0, 200) * 10
+
 def normalize_bracket_rankings(raw_rankings):
     if not isinstance(raw_rankings, list):
         return []
@@ -381,7 +391,7 @@ def unique_test_username(prefix):
             return username
         index += 1
 
-def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role="PLAYER"):
+def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role="PLAYER", random_points=False):
     username = unique_test_username(prefix)
     user = models.User.objects.create(
         username=username,
@@ -389,7 +399,7 @@ def create_test_user(prefix="player_auto_", nickname_prefix="测试用户", role
         role=role,
         nickname=f"{nickname_prefix}{username[-2:]}",
         email=f"{username}@lesai.test",
-        points=0,
+        points=random_test_points() if random_points else 0,
         created_at=datetime.now(),
         is_deleted=False
     )
@@ -1280,6 +1290,52 @@ def admin_delete_registration(request, registration_id):
     return JsonResponse({"success": True, "msg": "报名记录已删除"})
 
 @csrf_exempt
+@role_required("ADMIN")
+@transaction.atomic
+def admin_bulk_delete_registrations(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "msg": "仅支持POST"}, status=405)
+    try:
+        data = json.loads(request.body)
+        registration_ids = data.get("registration_ids", [])
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
+    if not isinstance(registration_ids, list) or not registration_ids:
+        return JsonResponse({"success": False, "msg": "请选择要删除的报名记录"})
+    try:
+        registration_ids = [int(item) for item in registration_ids if item]
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "msg": "报名记录参数错误"}, status=400)
+
+    registrations = list(
+        manageable_registrations(request.current_user)
+        .select_for_update()
+        .select_related("competition")
+        .filter(id__in=registration_ids)
+    )
+    if not registrations:
+        return JsonResponse({"success": False, "msg": "没有可删除的报名记录"})
+
+    participant_delta = {}
+    for registration in registrations:
+        if registration.review_status == 1:
+            participant_delta[registration.competition_id] = participant_delta.get(registration.competition_id, 0) + 1
+
+    deleted_ids = [registration.id for registration in registrations]
+    models.Registration.objects.filter(id__in=deleted_ids).delete()
+
+    if participant_delta:
+        competitions = models.Competition.objects.select_for_update().filter(id__in=participant_delta.keys())
+        for competition in competitions:
+            competition.current_participants = max(
+                0,
+                int(competition.current_participants or 0) - participant_delta.get(competition.id, 0)
+            )
+            competition.save(update_fields=["current_participants"])
+
+    return JsonResponse({"success": True, "msg": f"已删除 {len(deleted_ids)} 条报名记录"})
+
+@csrf_exempt
 @role_required("ORGANIZER", "PLAYER")
 @transaction.atomic
 def update_registration_status(request):
@@ -1430,6 +1486,7 @@ def admin_users(request):
             "email": u.email,
             "role_code": u.role,
             "role": role_map.get(u.role, u.role),
+            "points": u.points,
             "is_active": not u.is_deleted,
             "is_super_admin": is_super_admin(u),
         })
@@ -1487,6 +1544,7 @@ def admin_bulk_create_users(request):
         role = data.get("role", "PLAYER").strip().upper()
         password = data.get("password", "123456").strip() or "123456"
         nickname_prefix = data.get("nickname_prefix", "测试用户").strip() or "测试用户"
+        random_points = parse_bool(data.get("random_points", False))
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
     if role not in {"PLAYER", "ORGANIZER", "ADMIN"}:
@@ -1512,7 +1570,7 @@ def admin_bulk_create_users(request):
             role=role,
             nickname=f"{nickname_prefix}{len(created) + 1}",
             email=f"{username}@lesai.test",
-            points=0,
+            points=random_test_points() if random_points else 0,
             created_at=datetime.now(),
             is_deleted=False
         )
@@ -1522,7 +1580,8 @@ def admin_bulk_create_users(request):
             "user_code": user.user_code,
             "username": user.username,
             "nickname": user.nickname,
-            "role": user.role
+            "role": user.role,
+            "points": user.points
         })
 
     return JsonResponse({
@@ -1621,7 +1680,8 @@ def admin_bulk_create_competitions(request):
         count = int(data.get("count", 3))
         max_participants = int(data.get("max_participants", 8))
         competition_type = str(data.get("type", "PUBLIC")).upper()
-        auto_fill = bool(data.get("auto_fill", False))
+        auto_fill = parse_bool(data.get("auto_fill", False))
+        random_points = parse_bool(data.get("random_points", False))
     except (TypeError, ValueError, json.JSONDecodeError):
         return JsonResponse({"success": False, "msg": "请求格式错误"}, status=400)
     if count <= 0 or count > 30:
@@ -1662,7 +1722,12 @@ def admin_bulk_create_competitions(request):
         competition.save(update_fields=["competition_no"])
         if auto_fill:
             for _ in range(max_participants):
-                player = create_test_user(prefix="auto_player_", nickname_prefix="自动选手", role="PLAYER")
+                player = create_test_user(
+                    prefix="auto_player_",
+                    nickname_prefix="自动选手",
+                    role="PLAYER",
+                    random_points=random_points
+                )
                 models.Registration.objects.create(
                     player=player,
                     competition=competition,

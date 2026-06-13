@@ -70,8 +70,43 @@
             </div>
           </div>
 
+          <div class="table-tools">
+            <el-input
+              v-model="userKeyword"
+              clearable
+              placeholder="搜索编号 / 用户名 / 昵称"
+              class="tool-input"
+              @input="userPage = 1"
+            />
+            <el-select
+              v-model="userRoleFilter"
+              clearable
+              placeholder="角色"
+              class="tool-select"
+              @change="userPage = 1"
+            >
+              <el-option label="参赛者" value="PLAYER" />
+              <el-option label="主办方" value="ORGANIZER" />
+              <el-option label="管理员" value="ADMIN" />
+            </el-select>
+            <el-select
+              v-model="userStatusFilter"
+              clearable
+              placeholder="状态"
+              class="tool-select"
+              @change="userPage = 1"
+            >
+              <el-option label="正常" value="active" />
+              <el-option label="已封禁" value="blocked" />
+            </el-select>
+            <span class="table-count">
+              已选 {{ selectedUserIds.length }} 人 / 筛选 {{ filteredUserList.length }} 人
+            </span>
+          </div>
+
           <el-table
-            :data="userList"
+            :data="pagedUserList"
+            row-key="user_id"
             border
             v-loading="loading"
             @selection-change="handleUserSelectionChange"
@@ -80,11 +115,14 @@
               v-if="isSuperAdmin"
               type="selection"
               width="48"
+              reserve-selection
               :selectable="canSelectUserForJoin"
             />
             <el-table-column prop="user_id" label="用户ID" width="80" />
+            <el-table-column prop="user_code" label="编号" width="110" />
             <el-table-column prop="username" label="用户名" width="140" />
             <el-table-column prop="nickname" label="昵称" min-width="150" />
+            <el-table-column prop="points" label="积分" width="100" sortable />
             <el-table-column label="角色" width="150">
               <template #default="scope">
                 <el-tag :type="getRoleTagType(scope.row.role_code)">
@@ -117,6 +155,17 @@
               </template>
             </el-table-column>
           </el-table>
+          <el-pagination
+            v-if="filteredUserList.length > userPageSize"
+            v-model:current-page="userPage"
+            v-model:page-size="userPageSize"
+            class="table-pagination"
+            background
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="filteredUserList.length"
+            @size-change="userPage = 1"
+          />
         </div>
       </el-tab-pane>
 
@@ -217,8 +266,11 @@
         <el-form-item label="昵称前缀">
           <el-input v-model="bulkUserForm.nickname_prefix" placeholder="例如 测试用户" />
         </el-form-item>
+        <el-form-item label="随机积分">
+          <el-switch v-model="bulkUserForm.random_points" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
         <div class="dialog-tip">
-          批量生成的是测试账号，登录时只输用户名，不需要密码和验证码。
+          批量生成的是测试账号，登录时只输用户名，不需要密码和验证码。开启随机积分后会生成 0-2000 分，方便测试种子选手排序。
         </div>
       </el-form>
       <template #footer>
@@ -271,8 +323,16 @@
         <el-form-item label="随机填满人">
           <el-switch v-model="bulkCompetitionForm.auto_fill" active-text="是" inactive-text="否" />
         </el-form-item>
+        <el-form-item label="人员随机积分">
+          <el-switch
+            v-model="bulkCompetitionForm.random_points"
+            :disabled="!bulkCompetitionForm.auto_fill"
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
         <div class="dialog-tip">
-          所有批量赛事都会使用单淘汰赛制；选择填满人时会自动生成测试选手并直接通过报名。
+          所有批量赛事都会使用单淘汰赛制；选择填满人时会自动生成测试选手并直接通过报名。开启随机积分后，树图种子推荐会更接近真实比赛。
         </div>
       </el-form>
       <template #footer>
@@ -284,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -303,6 +363,11 @@ const recordList = ref([])
 const competitionList = ref([])
 const selectedUserIds = ref([])
 const selectedCompetitionIds = ref([])
+const userKeyword = ref('')
+const userRoleFilter = ref('')
+const userStatusFilter = ref('')
+const userPage = ref(1)
+const userPageSize = ref(20)
 const userDialogVisible = ref(false)
 const bulkUserDialogVisible = ref(false)
 const bulkJoinDialogVisible = ref(false)
@@ -318,7 +383,8 @@ const bulkUserForm = ref({
   prefix: 'player_auto_',
   count: 5,
   role: 'PLAYER',
-  nickname_prefix: '测试用户'
+  nickname_prefix: '测试用户',
+  random_points: true
 })
 const bulkJoinForm = ref({
   competition_id: ''
@@ -327,7 +393,28 @@ const bulkCompetitionForm = ref({
   count: 3,
   type: 'PUBLIC',
   max_participants: 8,
-  auto_fill: true
+  auto_fill: true,
+  random_points: true
+})
+
+const filteredUserList = computed(() => {
+  const keyword = userKeyword.value.trim().toLowerCase()
+  return userList.value.filter((item) => {
+    const matchesKeyword = !keyword || [
+      item.user_code,
+      item.username,
+      item.nickname,
+      item.email
+    ].some(value => String(value || '').toLowerCase().includes(keyword))
+    const matchesRole = !userRoleFilter.value || item.role_code === userRoleFilter.value
+    const matchesStatus = !userStatusFilter.value ||
+      (userStatusFilter.value === 'active' ? item.is_active : !item.is_active)
+    return matchesKeyword && matchesRole && matchesStatus
+  })
+})
+const pagedUserList = computed(() => {
+  const start = (userPage.value - 1) * userPageSize.value
+  return filteredUserList.value.slice(start, start + userPageSize.value)
 })
 
 const getHeaders = async () => {
@@ -389,7 +476,8 @@ const openBulkUserDialog = () => {
     prefix: 'player_auto_',
     count: 5,
     role: 'PLAYER',
-    nickname_prefix: '测试用户'
+    nickname_prefix: '测试用户',
+    random_points: true
   }
   bulkUserDialogVisible.value = true
 }
@@ -413,7 +501,8 @@ const openBulkCompetitionDialog = () => {
     count: 3,
     type: 'PUBLIC',
     max_participants: 8,
-    auto_fill: true
+    auto_fill: true,
+    random_points: true
   }
   bulkCompetitionDialogVisible.value = true
 }
@@ -818,6 +907,27 @@ onMounted(async () => {
 }
 .super-user-tag {
   margin-left: 6px;
+}
+.table-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.tool-input {
+  width: min(280px, 100%);
+}
+.tool-select {
+  width: 140px;
+}
+.table-count {
+  color: #667085;
+  font-size: 13px;
+}
+.table-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 .dialog-tip {
   margin-bottom: 12px;

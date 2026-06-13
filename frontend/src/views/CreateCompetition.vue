@@ -276,7 +276,6 @@ const handleCreate = async () => {
     }
   } catch (err) {
     ElMessage.error('请求失败，请检查后端服务')
-    console.error(err)
   }
 }
 

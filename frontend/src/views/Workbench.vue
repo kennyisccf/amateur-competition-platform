@@ -33,8 +33,9 @@
         class="toolbar-search"
         clearable
         placeholder="搜索赛事名称、编号或地点"
+        @input="tablePage = 1"
       />
-      <el-select v-model="statusFilter" clearable placeholder="赛事状态">
+      <el-select v-model="statusFilter" clearable placeholder="赛事状态" @change="tablePage = 1">
         <el-option
           v-for="item in statusOptions"
           :key="item.value"
@@ -42,7 +43,7 @@
           :value="item.value"
         />
       </el-select>
-      <el-select v-model="categoryFilter" clearable placeholder="赛事分类">
+      <el-select v-model="categoryFilter" clearable placeholder="赛事分类" @change="tablePage = 1">
         <el-option
           v-for="item in categoryOptions"
           :key="item"
@@ -50,9 +51,18 @@
           :value="item"
         />
       </el-select>
+      <el-button plain @click="resetFilters">清空筛选</el-button>
+      <span class="toolbar-count">共 {{ filteredCompetitions.length }} 场</span>
     </div>
 
-    <el-table :data="filteredCompetitions" border stripe style="width: 100%">
+    <el-table
+      v-loading="loading"
+      :data="pagedCompetitions"
+      row-key="id"
+      border
+      stripe
+      style="width: 100%"
+    >
       <el-table-column prop="competition_no" label="编号" width="130"/>
       <el-table-column prop="title" label="赛事名称" min-width="220"/>
       <el-table-column prop="category" label="分类" width="100"/>
@@ -70,13 +80,21 @@
       </el-table-column>
       <el-table-column label="邀请码" width="130">
         <template #default="scope">
-          <el-tag v-if="scope.row.type === 'PRIVATE'">{{ scope.row.invite_code }}</el-tag>
+          <el-button
+            v-if="scope.row.type === 'PRIVATE' && scope.row.invite_code"
+            size="small"
+            plain
+            :icon="CopyDocument"
+            @click="copyInviteCode(scope.row.invite_code)"
+          >
+            复制
+          </el-button>
           <span v-else>-</span>
         </template>
       </el-table-column>
       <el-table-column label="比赛时间" width="180">
         <template #default="scope">
-          {{new Date(scope.row.start_time) .toLocaleDateString()}}
+          {{ new Date(scope.row.start_time).toLocaleDateString() }}
         </template>
       </el-table-column>
       <el-table-column label="创建时间" width="180">
@@ -104,6 +122,27 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-empty
+      v-if="!loading && competitions.length > 0 && filteredCompetitions.length === 0"
+      description="没有符合筛选条件的赛事"
+    />
+    <el-empty
+      v-if="!loading && competitions.length === 0"
+      description="还没有创建或可管理的赛事"
+    >
+      <el-button type="primary" @click="router.push('/create')">发起新赛事</el-button>
+    </el-empty>
+    <el-pagination
+      v-if="filteredCompetitions.length > tablePageSize"
+      v-model:current-page="tablePage"
+      v-model:page-size="tablePageSize"
+      class="table-pagination"
+      background
+      layout="total, sizes, prev, pager, next"
+      :page-sizes="[10, 20, 50]"
+      :total="filteredCompetitions.length"
+      @size-change="tablePage = 1"
+    />
   </div>
 </template>
 
@@ -111,6 +150,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CopyDocument } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 const statusMap = {
   0: {text: '待审核', type: 'warning'},
@@ -121,9 +161,12 @@ const statusMap = {
 }
 const router = useRouter()
 const competitions = ref([])
+const loading = ref(false)
 const searchKeyword = ref('')
 const statusFilter = ref('')
 const categoryFilter = ref('')
+const tablePage = ref(1)
+const tablePageSize = ref(10)
 
 const statusOptions = [
   { label: '待审核', value: 0 },
@@ -157,6 +200,10 @@ const filteredCompetitions = computed(() => {
     return matchesKeyword && matchesStatus && matchesCategory
   })
 })
+const pagedCompetitions = computed(() => {
+  const start = (tablePage.value - 1) * tablePageSize.value
+  return filteredCompetitions.value.slice(start, start + tablePageSize.value)
+})
 
 const formatRule = (item) => {
   return item.competition_format_text || '单淘汰'
@@ -183,13 +230,33 @@ const loadMyCompetitions = async () => {
   }
 
   try {
+    loading.value = true
     const headers = await getHeaders()
     const res = await request.get('/api/my_competitions/?scope=managed', { headers })
     if (res.data.success) {
       competitions.value = res.data.competitions
+      tablePage.value = 1
     }
   } catch (err) {
     ElMessage.error('加载赛事失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const resetFilters = () => {
+  searchKeyword.value = ''
+  statusFilter.value = ''
+  categoryFilter.value = ''
+  tablePage.value = 1
+}
+
+const copyInviteCode = async (inviteCode) => {
+  try {
+    await navigator.clipboard.writeText(inviteCode)
+    ElMessage.success('邀请码已复制')
+  } catch (err) {
+    ElMessage.warning('复制失败，请手动复制')
   }
 }
 
@@ -318,9 +385,19 @@ onMounted(() => {
   width: 300px;
 }
 
+.toolbar-count {
+  color: #667085;
+  font-size: 13px;
+}
+
 .el-table {
   border-radius: 8px;
   overflow: hidden;
+}
+
+.table-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 @media (max-width: 900px) {

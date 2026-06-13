@@ -61,6 +61,7 @@ urlpatterns = [
     path('api/registrations/status/', views.update_registration_status),
     path('api/admin/force_registration/', views.admin_force_registration),
     path('api/admin/registrations/<int:registration_id>/delete/', views.admin_delete_registration),
+    path('api/admin/registrations/bulk_delete/', views.admin_bulk_delete_registrations),
     path('api/competitions/<int:competition_id>/status/', views.update_competition_status),
     path('api/record_result/', views.record_result),
     path('api/admin/users/', views.admin_users),

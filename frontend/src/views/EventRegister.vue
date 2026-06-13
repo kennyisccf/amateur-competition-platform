@@ -3,7 +3,7 @@
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else class="register-content">
       <div class="competition-info">
-        <a href="javascript:;" @click="router.push('/home')">← 返回赛事大厅</a>
+        <a href="javascript:;" @click="router.push(`/event-detail/${competitionData.id || route.params.id}`)">← 返回赛事详情</a>
         <h2>{{ competitionData.title }}</h2>
         <p>请填写报名信息，提交参赛申请</p>
         <div style="color: #666; font-size: 14px;">赛事状态: <span style="color: #52c41a">报名进行中</span></div>
@@ -118,7 +118,6 @@ const loadCompetitionDetail = async () => {
     }
   } catch (err) {
     ElMessage.error('加载赛事信息失败')
-    console.error(err)
   }
 }
 
@@ -150,7 +149,7 @@ const handleSubmitRegister = async () => {
   const userId = localStorage.getItem('user_id')
   if (!userId) {
     ElMessage.warning('请先登录后再报名')
-    router.push('/login')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
 
@@ -180,13 +179,12 @@ const handleSubmitRegister = async () => {
     )
     if (res.data.success) {
       ElMessage.success('报名成功！')
-      router.push('/home')
+      router.push(`/event-detail/${competitionData.value.id}`)
     } else {
       ElMessage.error(res.data.msg || '报名失败')
     }
   } catch (err) {
     ElMessage.error('报名请求失败，请检查后端服务')
-    console.error(err)
   }
 }
 

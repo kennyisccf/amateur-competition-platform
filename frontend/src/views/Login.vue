@@ -1,15 +1,6 @@
 <template>
   <div class="login-container">
-    <div
-      v-for="(image, index) in backgroundImages"
-      :key="image"
-      class="login-bg"
-      :class="{ active: index === activeBgIndex }"
-      :style="{
-        backgroundImage: `url(${image})`
-      }"
-    />
-    <div class="login-scrim" />
+    <AuthBackground />
     <div class="login-left">
       <h1>乐赛</h1>
       <p>一站式服务平台 · 精彩有你</p>
@@ -66,10 +57,12 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AuthBackground from '@/components/AuthBackground.vue'
 import request from '@/utils/request'
+const route = useRoute()
 const router = useRouter()
 
 const form = ref({
@@ -79,41 +72,13 @@ const form = ref({
 })
 const captchaCode = ref('')
 const captchaLoading = ref(false)
-let backgroundTimer = null
-const backgroundImages = [
-  '/login-backgrounds/badminton-login.png',
-  '/login-backgrounds/football-login.png',
-  '/login-backgrounds/esports-login.png',
-  '/login-backgrounds/basketball-login.png',
-  '/login-backgrounds/tennis-login.png',
-  '/login-backgrounds/tabletennis-login.png',
-  '/login-backgrounds/track-login.png',
-  '/login-backgrounds/volleyball-login.png',
-  '/login-backgrounds/swimming-login.png'
-]
-const activeBgIndex = ref(Math.floor(Math.random() * backgroundImages.length))
 
-const preloadBackgrounds = () => {
-  backgroundImages.forEach((src) => {
-    const image = new Image()
-    image.src = src
-  })
-}
-
-const pickNextBackgroundIndex = () => {
-  if (backgroundImages.length <= 1) return 0
-  let nextIndex = activeBgIndex.value
-  while (nextIndex === activeBgIndex.value) {
-    nextIndex = Math.floor(Math.random() * backgroundImages.length)
+const getSafeRedirectPath = () => {
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) {
+    return redirect
   }
-  return nextIndex
-}
-
-const startBackgroundLoop = () => {
-  if (backgroundTimer) return
-  backgroundTimer = window.setInterval(() => {
-    activeBgIndex.value = pickNextBackgroundIndex()
-  }, 6000)
+  return '/home'
 }
 
 const loadCaptcha = async () => {
@@ -163,7 +128,7 @@ const handleLogin = async () => {
       localStorage.setItem('role', res.data.role)
       localStorage.setItem('is_super_admin', res.data.is_super_admin ? '1' : '0')
       
-      router.push('/home')
+      router.push(getSafeRedirectPath())
       // if (res.data.role === 'PLAYER') {
         // router.push('/home')
       // } else if (res.data.role === 'ORGANIZER') {
@@ -183,16 +148,7 @@ const handleLogin = async () => {
 }
 
 onMounted(() => {
-  preloadBackgrounds()
   loadCaptcha()
-  startBackgroundLoop()
-})
-
-onBeforeUnmount(() => {
-  if (backgroundTimer) {
-    window.clearInterval(backgroundTimer)
-    backgroundTimer = null
-  }
 })
 </script>
 
@@ -207,29 +163,6 @@ onBeforeUnmount(() => {
   padding: clamp(32px, 7vw, 96px) clamp(24px, 8vw, 128px);
   overflow: hidden;
   background: #081c3a;
-}
-.login-bg,
-.login-scrim {
-  position: absolute;
-  inset: 0;
-}
-.login-bg {
-  background-size: cover;
-  background-position: center;
-  opacity: 0;
-  transform: scale(1.03);
-  transition: opacity 1.2s ease, transform 6s ease;
-  will-change: opacity, transform;
-}
-.login-bg.active {
-  opacity: 1;
-  transform: scale(1.06);
-}
-.login-scrim {
-  background:
-    radial-gradient(circle at 18% 25%, rgba(22, 119, 255, 0.42), transparent 32%),
-    linear-gradient(90deg, rgba(5, 16, 38, 0.86) 0%, rgba(5, 16, 38, 0.54) 48%, rgba(5, 16, 38, 0.78) 100%);
-  backdrop-filter: saturate(1.08);
 }
 .login-left {
   position: relative;
@@ -354,9 +287,4 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .login-bg {
-    transition: opacity 0.2s linear;
-  }
-}
 </style>
