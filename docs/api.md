@@ -1,564 +1,178 @@
-**乐赛平台接口说明文档**
+# 乐赛 API 说明文档
 
-## 全局规范
-* **后端代码位于**`amateur-competition-platform\backend\amateur_competition_platform\app1\views.py`
+## 1. 全局约定
 
-* **基础路径:** `http://localhost:8000/api`
+| 项目 | 内容 |
+| --- | --- |
+| 后端地址 | `http://localhost:8000` |
+| API 前缀 | `/api/` |
+| 登录态 | Django Session / Cookie |
+| 请求格式 | JSON 为主，缩图上传使用 `multipart/form-data` |
+| 返回格式 | `{ "success": true/false, "msg": "...", ... }` |
 
-* **请求头:** 所有需要鉴权的接口，均需要在 Header 中携带 `Authorization: Bearer <your_jwt_token>`
+当前系统不使用 Bearer Token。登录成功后，后端将用户信息写入 Session，前端通过 `withCredentials` 携带 Cookie。
 
-* **全局返回格式:**
+## 2. 鉴权与用户
 
-    ```json
-    {
-      "code": 200,
-      "message": "success",
-      "data": {}
-    }
-    ```
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/api/login-captcha/` | 获取登录验证码 | 无 |
+| POST | `/api/login/` | 用户登录 | 无 |
+| POST | `/api/logout/` | 退出登录 | 登录 |
+| POST | `/api/register/` | 用户注册 | 无 |
+| GET | `/api/user/` | 当前用户详情 | 登录 |
+| POST | `/api/update_user/` | 更新用户资料 | 登录 |
+| GET | `/csrf/` | 获取 CSRF Token | 无 |
 
+登录参数示例：
 
-
-## **1. 基础模块**
-
-
-
-### **1.1 获取 CSRF Token**
-
-* **请求地址:** /csrf/
-* **请求方式:** GET
-* **功能说明:** 获取用于防御跨站请求伪造的 Token。
-* **返回结果:**
-
-JSON
-
+```json
 {
-
-&#x20; "csrfToken": "your\_token\_string"
-
-}
-
-
-
-
-
-## **2. 用户模块**
-
-
-
-### **2.1 用户登录**
-
-* **请求地址:** /api/login/
-* **请求方式:** POST
-* **请求格式:** application/json
-* **请求参数:**
-
-|**参数名**|**类型**|**必填**|**说明**|
-|-|-|-|-|
-|username|String|是|用户名|
-|password|String|是|密码|
-|role|String|是|角色中文，传："选手"、"主办方" 或 "管理员"|
-
-* **返回结果:**
-
-JSON
-
-{
-
-&#x20; "success": true,
-
-&#x20; "msg": "登录成功",
-
-&#x20; "user\_id": 1
-
-&#x20; "token": "jwt_token_string"
-
-}
-
-
-
-### **2.2 用户注册**
-
-* **请求地址:** /api/register/
-* **请求方式:** POST
-* **请求格式:** multipart/form-data 或 application/x-www-form-urlencoded
-* **请求参数:**
-
-|**参数名**|**类型**|**必填**|**说明**|
-|-|-|-|-|
-|username|String|是|用户名（最长50字符）|
-|password|String|是|密码|
-|password2|String|是|确认密码|
-|role|String|否|角色英文，传：PLAYER, ORGANIZER, ADMIN（默认 PLAYER）|
-|nickname|String|否|昵称（最长50字符，默认同用户名）|
-|email|String|否|邮箱|
-
-* **返回结果:**
-
-JSON
-
-{
-
-&#x20; "success": true,
-
-&#x20; "msg": "注册成功"
-
-}
-
-
-
-## **3. 赛事模块**
-
-### **3.1 获取赛事详情**
-
-* **请求地址:** /api/competition/[int:competition\\\_id](int:competition\\\\_id)/ (例如: /api/competition/1/)
-* **请求方式:** GET
-* **返回结果:**
-
-JSON
-
-{
-
-&#x20; "success": true,
-
-&#x20; "data": {
-
-&#x20;   "id": 1,
-
-&#x20;   "title": "赛事名称",
-
-&#x20;   "category": "类别",
-
-&#x20;   "location": "比赛地点",
-
-&#x20;   "description": "赛事描述",
-
-&#x20;   "type": "赛事类型",
-
-&#x20;   "organizer": {
-
-&#x20;     "id": 2,
-
-&#x20;     "username": "organizer1",
-
-&#x20;     "nickname": "主办方昵称"
-
-&#x20;   },
-
-&#x20;   "status": "状态",
-
-&#x20;   "max\_participants": 100,
-
-&#x20;   "current\_participants": 10,
-
-&#x20;   "reward\_points": 100,
-
-&#x20;   "start\_time": "2026-06-01T10:00:00",
-
-&#x20;   "end\_time": "2026-06-02T18:00:00",
-
-&#x20;   "created\_at": "2026-05-23T10:00:00"
-
-&#x20; }
-
-}
-
-### **3.2 赛事报名**
-
-* **请求地址:** /api/register_competition/ 
-* **请求方式:** POST
-* **请求格式:** application/json
-* **请求参数:**
-
-|**参数名**|**类型**|**必填**|**说明**|
-|-|-|-|-|
-|player\_id|Integer|是|选手 ID|
-|competition\_id|Integer|是|赛事 ID|
-|invite_code|string|否|私人赛事邀请码|
-
-* **返回结果:**
-
-JSON
-
-{
-
-&#x20; "success": true,
-
-&#x20; "msg": "报名成功"
-
-}
-
-1. `player_id` 为当前登录用户 ID，`competition_id` 为要报名的赛事 ID。
-2. 后端会验证：
-   - 用户存在且为选手角色
-   - 赛事存在
-   - 报名人数未超过上限
-   - 用户未重复报名
-3. 前端收到返回 JSON 后，根据 `success` 判断是否报名成功，并展示 `msg` 提示用户。
-4. 建议用 axios 或 fetch 发送 POST 请求，设置 `Content-Type: application/json`。
-5. 开发阶段 CSRF 可暂时使用 `@csrf_exempt`，生产环境请传递 CSRF Token。
-
-### **3.3 创建赛事**
-
-- **请求地址:** /api/create_competition/ 
-- **请求方式:**POST
-- **请求格式:**application/json
-- **请求参数:**
-
-| **参数名**       | **类型** | **必填** | **说明**                            |
-| ---------------- | -------- | -------- | ----------------------------------- |
-| title            | string   | 是       | 赛事名称                            |
-| category         | string   | 是       | 赛事种类                            |
-| location         | string   | 是       | 赛事地点                            |
-| description      | string   | 是       | 赛事描述                            |
-| competition_type | string   | 是       | 是否公开，PUBLIC:公开，PRIVATE:私人 |
-| organizer_id     | integer  | 是       | 主办方id                            |
-| max_participants | integer  | 是       | 最大参与人数                        |
-| reward_points    | integer  | 是       | 奖励积分                            |
-| start_time       | datetime | 是       | 开始时间                            |
-| end_time         | datetime | 是       | 结束时间                            |
-
-* **返回结果:**
-
-JSON
-
-{
-
-  "success": true,
-  "msg": "赛事创建成功"
-
-}
-
-------
-
-
-### 3.4 我的赛事
-
-- **请求地址:** `/api/my_competitions/`
-- **请求方式:** GET
-- **请求格式:** Query Params
-
-- **请求参数:**
-
-| 参数名       | 类型    | 必填 | 说明               |
-| ------------ | ------- | ---- | ------------------ |
-| organizer_id | integer | 是   | 主办方ID           |
-| status       | integer | 否   | 赛事状态筛选       |
-| type         | string  | 否   | 赛事类型筛选       |
-| keyword      | string  | 否   | 赛事标题关键词搜索 |
-
-- **请求示例:**
-
-```
-/api/my_competitions/?organizer_id=2&status=1
-```
-
-- **返回结果:**
-
-```
-{
-    "success": true,
-    "competitions": [
-        {
-            "id":,
-            "title": "",
-            "category": "",
-            "location": "",
-            "description": "",
-            "type": "",
-            "status":,
-            "max_participants": ,
-            "current_participants": ,
-            "reward_points": ,
-            "start_time": "",
-            "end_time": "",
-            "invite_code": "",
-            "reject_reason":
-        }
-    ]
+  "username": "player_mike",
+  "password": "123456",
+  "captcha": "ABCD"
 }
 ```
 
-------
+登录返回示例：
 
-### 3.5 删除赛事
-
-- **请求地址:** `/api/competitions/<competition_id>/delete/`
-- **请求方式:** DELETE
-- **请求格式:** 无
-
-- **路径参数:**
-
-| 参数名         | 类型    | 必填 | 说明   |
-| -------------- | ------- | ---- | ------ |
-| competition_id | integer | 是   | 赛事ID |
-
-- **返回结果:**
-
-```
-{
-    "success": true,
-    "msg": "删除成功"
-}
-```
-
-------
-
-### 3.6 修改赛事
-
-- **请求地址:** `/api/competitions/<competition_id>/update/`
-- **请求方式:** PUT
-- **请求格式:** application/json
-
-- **请求参数**
-
-| 参数名           | 类型    | 必填 | 说明         |
-| ---------------- | ------- | ---- | ------------ |
-| title            | string  | 否   | 赛事名称     |
-| category         | string  | 否   | 赛事分类     |
-| location         | string  | 否   | 赛事地点     |
-| description      | string  | 否   | 赛事描述     |
-| max_participants | integer | 否   | 最大参与人数 |
-| reward_points    | integer | 否   | 奖励积分     |
-
-- **返回结果**
-
-```
-{
-    "success": true,
-    "msg": "修改成功"
-}
-```
-
-------
-
-### 3.7 查看赛事报名情况
-
-- **请求地址:** `/api/competitions/<competition_id>/registrations/`
-- **请求方式:** GET
-- **请求格式:** 无
-
-- **路径参数**
-
-| 参数名         | 类型    | 必填 | 说明   |
-| -------------- | ------- | ---- | ------ |
-| competition_id | integer | 是   | 赛事ID |
-
-- **返回结果**
-
-```
-{
-    "success": true,
-    "registrations": [
-        {
-            "registration_id": ,
-            "player_id": ,
-            "username": "",
-            "nickname": "",
-            "status": ,
-            "registration_time": ""
-        }
-    ]
-}
-```
-
-
-## **4. 个人档案模块**
-
-
-
-### **4.1 获取个人信息与积分**
-
-* **请求地址:** /api/profile/
-* **请求方式:** GET
-* **请求格式:** 无
-
-* **返回结果:**
-
-{ 
-
-  "success": true,
-  "data": {
-    "user_id": ,
-    "username": "",
-    "nickname": "",
-    "role": "",
-    "total_points": 
-  }
-
-}
-
-
-### **4.2 获取我的报名记录**
-
-* **请求地址:** /api/my_registrations/
-* **请求方式:** GET
-* **请求格式:** 无
-
-- **路径参数**
-
-| 参数名    | 类型    | 必填 | 说明   |
-| ----------| ------- | ---- | ------ |
-| player_id | integer | 是   | 玩家ID |
-
-* **返回结果:**
-
-{ 
-
-  "success": true,
-  "data": {
-    "user_id": ,
-    "username": "",
-    "nickname": "",
-    "role": "",
-    "total_points": 
-  }
-
-}
-
-
-## **5. 管理员模块**
-
-
-### 5.1 获取待审核赛事
-
-- **请求地址:** `/api/admin/pending_competitions/`
-- **请求方式:** GET
-- **请求格式:** 无
-
-- **返回结果:**
-
-```
-{
-    "success": true,
-    "competitions": [
-        {
-            "id": ,
-            "title": "",
-            "category": "",
-            "location": "",
-            "description": "",
-            "max_participants":,
-            "current_participants":,
-            "reward_points":,
-            "start_time": "",
-            "end_time": "",
-            "organizer": {
-                "id": ,
-                "username": "",
-                "nickname": ""
-            }
-        }
-    ]
-}
-```
-
-
-### 5.2 审核赛事
-
-- **请求地址:** `/api/admin/review_competition/`
-- **请求方式:** POST
-- **请求格式:** application/json
-
-- **请求参数:**
-
-| 参数名         | 类型    | 必填 | 说明                             |
-| -------------- | ------- | ---- | -------------------------------- |
-| competition_id | integer | 是   | 赛事ID                           |
-| status         | integer | 是   | 审核结果：1=审核通过，4=审核驳回 |
-| reason         | String  | 否   | 驳回原因 |
-
-
-- **返回结果:**
-
-```
-{
-    "success": true,
-    "msg": "审核完成"
-}
-```
-
-
-### 5.3 获取用户列表
-
-- **请求地址:** `/api/admin/users/`
-- **请求方式:** GET
-- **请求格式:** 无
-
-
-- **返回结果:**
-
-```
+```json
 {
   "success": true,
-  "users": [
-    {
-      "user_id": ,
-      "username": "",
-      "role": "",
-      "is_active": ,
-      "created_at": ""
-    }
-  ]
+  "msg": "登录成功",
+  "user_id": 3,
+  "username": "player_mike",
+  "role": "PLAYER",
+  "is_super_admin": false
 }
-
-
 ```
 
+## 3. 赛事接口
 
-### 5.4 封禁/解封用户
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/api/competitions/` | 赛事大厅列表 | 登录 |
+| GET | `/api/competition/<id>/` | 赛事详情 | 登录 |
+| POST | `/api/create_competition/` | 创建赛事 | `PLAYER` / `ORGANIZER` / `ADMIN` |
+| GET | `/api/my_competitions/` | 我的赛事/赛事工作台 | `PLAYER` / `ORGANIZER` / `ADMIN` |
+| PUT | `/api/competitions/<id>/update/` | 修改赛事 | 创建者/管理员 |
+| DELETE | `/api/competitions/<id>/delete/` | 删除赛事 | 创建者/管理员 |
+| POST | `/api/competitions/<id>/status/` | 更新赛事状态 | 创建者/管理员 |
+| POST | `/api/upload/competition_thumbnail/` | 上传赛事缩图 | 登录 |
 
-- **请求地址:** `/api/admin/users/<int:user_id>/status/`
-- **请求方式:** PUT
-- **请求格式:** application/json
+创建赛事核心字段：
 
-- **请求参数:**
+| 字段 | 说明 |
+| --- | --- |
+| `title` | 赛事名称 |
+| `category` | 赛事分类 |
+| `location` | 比赛地点 |
+| `description` | 赛事说明 |
+| `type` | `PUBLIC` 或 `PRIVATE` |
+| `max_participants` | 人数上限 |
+| `reward_points` | 奖励积分 |
+| `start_time` | 开始时间 |
+| `end_time` | 结束时间 |
+| `thumbnail_url` | 默认缩图或上传图路径 |
 
-| 参数名     | 类型    | 必填 | 说明                  |
-| ----------| ------- | ---- | -------------------- |
-| is_active | Boolean | 是   | true=解封，false=封禁 |
+## 4. 报名接口
 
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| POST | `/api/register_competition/` | 赛事报名 | 登录 |
+| GET | `/api/competitions/<id>/registrations/` | 查看赛事报名 | 登录 |
+| GET | `/api/my_registrations/` | 我的报名记录 | 登录 |
+| POST | `/api/cancel_registration/` | 取消报名 | 登录 |
+| POST | `/api/approve_registration/` | 通过报名 | 创建者/管理员 |
+| POST | `/api/reject_registration/` | 驳回报名 | 创建者/管理员 |
+| POST | `/api/registrations/status/` | 更新报名状态 | 创建者/管理员 |
+| POST | `/api/registrations/visibility/` | 更新档案可见性 | 登录 |
+| POST | `/api/admin/force_registration/` | 管理员强制添加报名 | 管理员 |
+| DELETE | `/api/admin/registrations/<id>/delete/` | 删除报名记录 | 管理员 |
+| POST | `/api/admin/registrations/bulk_delete/` | 批量删除报名记录 | 管理员 |
 
+报名校验：
 
-- **返回结果:**
+- 用户必须登录。
+- 赛事必须存在。
+- 赛事人数不能超过上限。
+- 同一用户不能重复报名同一赛事。
+- 私人赛事需邀请码正确。
+- 战队报名会校验成员账号。
 
-```
-{
-  "success": true,
-  "msg": "用户状态更新成功"
-}  
+## 5. 淘汰树与结果接口
 
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET/POST | `/api/competitions/<id>/bracket/` | 读取或生成淘汰树 | 登录/创建者 |
+| POST | `/api/record_result/` | 录入比赛结果 | 创建者/管理员 |
 
-```
+淘汰树数据保存在 `competition.bracket_state` 字段中。详见 [淘汰树设计说明](bracket-design.md)。
 
-### 5.5 获取审核记录
+## 6. 消息通知与好友接口
 
-- **请求地址:** `/api/admin/audit_records/`
-- **请求方式:** GET
-- **请求格式:** 无
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/api/notifications/` | 消息中心 | 登录 |
+| GET | `/api/friends/` | 好友列表和申请 | 登录 |
+| GET | `/api/friends/search/` | 搜索用户/好友 | 登录 |
+| POST | `/api/friends/request/` | 发送好友申请 | 登录 |
+| POST | `/api/friends/respond/` | 通过或拒绝好友申请 | 登录 |
+| GET/POST | `/api/friends/settings/` | 好友申请开关 | 登录 |
+| GET/POST | `/api/friends/<user_id>/messages/` | 好友聊天消息 | 登录 |
+| DELETE | `/api/friends/<user_id>/delete/` | 删除好友 | 登录 |
 
+通知中心汇总：
 
+- 好友申请。
+- 好友聊天未读。
+- 赛事审核驳回。
+- 报名审核驳回。
 
-- **返回结果:**
+删除好友时，系统会清理双方之间未读消息，避免通知残留。
 
-```
-{
-  "success": true,
-  "records": [
-    {
-      "record_id": ,
-      "competition_id": ,
-      "admin_id": ,
-      "action": "审核通过",
-      "created_at": ""
-    }
-  ]
-}
+## 7. 管理员接口
 
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/admin/pending_competitions/` | 待审核赛事 |
+| POST | `/api/admin/review_competition/` | 审核赛事 |
+| GET | `/api/admin/users/` | 用户列表 |
+| POST | `/api/admin/users/create/` | 创建用户 |
+| POST | `/api/admin/users/bulk_create/` | 批量生成用户 |
+| POST | `/api/admin/users/bulk_delete/` | 批量删除用户 |
+| PUT | `/api/admin/users/<id>/status/` | 封禁/解封用户 |
+| DELETE | `/api/admin/users/<id>/delete/` | 删除用户 |
+| GET | `/api/admin/audit_records/` | 审核记录 |
+| GET | `/api/admin/stats/` | 平台统计 |
+| POST | `/api/admin/competitions/bulk_add_users/` | 批量添加参赛者 |
+| POST | `/api/admin/competitions/bulk_create/` | 批量创建赛事 |
+| POST | `/api/admin/competitions/bulk_delete/` | 批量删除赛事 |
 
-```
+## 8. 状态码说明
 
+### 8.1 赛事状态
 
+| 值 | 含义 |
+| --- | --- |
+| 0 | 待审核 |
+| 1 | 报名中 |
+| 2 | 进行中 |
+| 3 | 已结束 |
+| 4 | 已驳回 |
 
+### 8.2 报名审核状态
 
+| 值 | 含义 |
+| --- | --- |
+| 0 | 未审核 |
+| 1 | 审核通过 |
+| 2 | 审核未通过 |
 
+### 8.3 好友关系状态
+
+| 值 | 含义 |
+| --- | --- |
+| `pending` | 待处理 |
+| `accepted` | 已通过 |
+| `rejected` | 已拒绝 |

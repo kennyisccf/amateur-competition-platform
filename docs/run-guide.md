@@ -1,89 +1,141 @@
-## 乐赛平台本地运行指南
-本文档介绍如何在本地启动「乐赛一站式全民赛事组织服务平台」的前后端及数据库。
+# 乐赛本地运行指南
 
-# 一、 环境要求
-前端: Node.js (推荐 v18+)
+本文档用于在本机启动「乐赛」前后端和 MySQL 数据库。路径以当前项目机器为准。
 
-后端: Python 3.11
+## 1. 环境要求
 
-数据库: MySQL 8.0
+| 环境 | 建议版本 |
+| --- | --- |
+| Node.js | 18+ |
+| Python | 项目虚拟环境已配置 |
+| Django | 6.0.5 |
+| MySQL | 8.0 |
+| 浏览器 | Chrome / Edge |
 
-# 二、 数据库配置
-1.打开本地 MySQL 数据库工具（如 Navicat 或 DataGrip）。
+## 2. 项目路径
 
-2.执行以下命令创建数据库：
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git
+```
 
- SQL
- 
- CREATE DATABASE lesai DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
- 
-3.导入数据库表结构：运行 database/lesai.sql 文件中的 SQL 语句。
+后端：
 
-4.核对配置：确保本地 MySQL 用户名和密码与后端配置文件一致。
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform
+```
 
-# 三、 后端运行 (Django)
+前端：
 
-1.进入后端目录：
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend
+```
 
-cd backend/amateur_competition_platform
+## 3. 数据库初始化
 
-2.创建并激活虚拟环境（推荐）：
+数据库名：`lesai_db`
 
-   * 创建虚拟环境：python -m venv venv
-   
-   * Windows 激活: venv\Scripts\activate
+本机 root 密码：`s08006172`
 
-   * Mac/Linux 激活：source venv/bin/activate
+完整初始化脚本：
 
-   
-3.安装依赖包：
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\lesai.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4"
+```
 
-   pip install django djangorestframework djangorestframework-simplejwt django-cors-headers mysqlclient
+如果只执行升级脚本：
 
-   如果目录下有 requirements.txt，可直接运行以下命令批量安装：
-   
-   pip install -r requirements.txt
-   
-4.配置数据库：
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\upgrade_registration_fields.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4" lesai_db
+```
 
-在 amateur_competition_platform/settings.py 中，找到 DATABASES 配置项，修改为您本地 MySQL 的真实用户名和密码。
+## 4. 启动后端
 
-5.数据库迁移（生成表结构）：
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe manage.py runserver
+```
 
-python manage.py makemigrations
+后端默认地址：
 
-python manage.py migrate
+```text
+http://localhost:8000
+```
 
-6.启动后端服务：
+## 5. 启动前端
 
-python manage.py runserver
-默认后端访问地址为：http://localhost:8000
+另开一个 PowerShell：
 
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd run dev
+```
 
-# 四、 前端运行 (Vue3 + Vite)
+前端默认地址：
 
-1.进入前端目录：
+```text
+http://localhost:5173/
+```
 
-cd frontend
+## 6. 测试账号
 
-2.安装前端项目依赖：
+所有账号密码均为 `123456`，验证码按登录页显示填写。
 
-   npm install
-   
-3.启动前端开发服务器：
+| 角色 | 账号 |
+| --- | --- |
+| 管理员 | `admin` |
+| 管理员 | `test_admin` |
+| 主办方 | `org_zs` |
+| 参赛者 | `player_mike` |
+| 参赛者 | `player_jane` |
+| 参赛者 | `player_test` |
 
-   npm run dev
+## 7. 常用检查命令
 
-     默认前端访问地址为：http://localhost:5173
+查看工作区状态：
 
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+git status --short
+```
 
-   
-# 五、 测试账号
+前端生产构建：
 
-为方便验收与测试，数据库中已预置以下测试账号（需由测试负责人路良钧初始化）：
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd run build
+```
 
-* 选手测试账号: 账号: [待补充] / 密码: [待补充]
+后端系统检查：
 
-* 主办方测试账号: 账号: [待补充] / 密码: [待补充]
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe manage.py check
+```
 
-* 管理员测试账号: 账号: [待补充] / 密码: [待补充]
+## 8. 常见问题
+
+### 8.1 登录失败
+
+- 确认密码为 `123456`。
+- 确认验证码填写的是登录页当前显示值。
+- 确认后端服务已启动。
+
+### 8.2 前端无法请求后端
+
+- 确认后端运行在 `localhost:8000`。
+- 确认前端运行在 `localhost:5173`。
+- 当前 Axios 使用同源代理/本地配置，开发时需要同时启动前后端。
+
+### 8.3 数据和演示页面不一致
+
+- 重新导入 `database/lesai.sql`。
+- 确认数据库名为 `lesai_db`。
+- 确认后端 settings 中数据库账号密码正确。
+
+## 9. Git 提交示例
+
+```powershell
+git add .
+git commit -m "docs: update final project documentation"
+git push origin dev/zzf
+```
