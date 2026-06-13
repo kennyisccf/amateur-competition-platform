@@ -435,6 +435,7 @@ const deleteFriend = async (item) => {
       }
       await loadFriends()
       if (searched.value) await searchUsers()
+      notifyNotificationsChanged()
     } else {
       ElMessage.warning(res.data.msg || '删除失败')
     }

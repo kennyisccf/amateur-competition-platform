@@ -2082,6 +2082,13 @@ def delete_friend(request, user_id):
     ).first()
     if not relation:
         return JsonResponse({"success": False, "msg": "好友关系不存在"})
+    current_user_id = request.current_user.id
+    other_user_id = relation.addressee_id if relation.requester_id == current_user_id else relation.requester_id
+    models.FriendMessage.objects.filter(
+        Q(sender_id=current_user_id, receiver_id=other_user_id) |
+        Q(sender_id=other_user_id, receiver_id=current_user_id),
+        is_read=False
+    ).update(is_read=True)
     relation.delete()
     return JsonResponse({"success": True, "msg": "好友已删除"})
 
@@ -2234,9 +2241,21 @@ def notifications(request):
             "friend_relation_id": relation.id,
             "created_at": relation.updated_at.strftime("%Y-%m-%d %H:%M")
         })
-    unread_messages = models.FriendMessage.objects.filter(
+    accepted_friend_ids = set()
+    for relation in models.FriendRelation.objects.filter(
+        status="accepted"
+    ).filter(
+        Q(requester=user) | Q(addressee=user)
+    ):
+        accepted_friend_ids.add(relation.addressee_id if relation.requester_id == user.id else relation.requester_id)
+    models.FriendMessage.objects.filter(
         receiver=user,
         is_read=False
+    ).exclude(sender_id__in=accepted_friend_ids).update(is_read=True)
+    unread_messages = models.FriendMessage.objects.filter(
+        receiver=user,
+        is_read=False,
+        sender_id__in=accepted_friend_ids
     ).select_related("sender").order_by("-created_at")
     unread_by_sender = {}
     for item in unread_messages:

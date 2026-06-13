@@ -182,7 +182,7 @@ onMounted(() => {
   window.addEventListener(NOTIFICATION_SYNC_EVENT, syncNotificationBadge)
   window.addEventListener('focus', refreshNotificationBadge)
   document.addEventListener('visibilitychange', refreshWhenVisible)
-  badgeTimer = window.setInterval(refreshNotificationBadge, 10000)
+  badgeTimer = window.setInterval(refreshNotificationBadge, 3000)
 })
 
 onUnmounted(() => {
