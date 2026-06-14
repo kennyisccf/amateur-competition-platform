@@ -36,7 +36,7 @@
 ## 3. 启动
 
 ```powershell
-cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+cd frontend
 npm.cmd run dev
 ```
 

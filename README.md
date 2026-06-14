@@ -81,6 +81,7 @@
 | [数据库设计](database/database-design.md) | 当前 MySQL 表结构和状态码 |
 | [淘汰树设计](docs/bracket-design.md) | 单淘汰树、种子、轮空和回滚逻辑 |
 | [测试报告](docs/test/test-report.md) | 构建、Django check、功能测试和边界测试 |
+| [界面截图](docs/assets/screenshots.md) | 登录、注册、赛事大厅、工作台、淘汰树等页面截图 |
 | [文档审查](docs/documentation-audit.md) | 已有文档盘点与最终文档说明 |
 
 ## 完整执行指南

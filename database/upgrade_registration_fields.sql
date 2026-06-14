@@ -292,8 +292,8 @@ WHERE `user_code` IS NULL OR `user_code` = '';
 UPDATE `competition`
 SET
   `title` = '校内羽毛球挑战赛',
-  `location` = '中山大学体育馆羽毛球场',
-  `description` = '用于演示大规模单淘汰赛程、种子选手、报名审核和赛程维护流程的私人赛事。',
+  `location` = '校内体育馆羽毛球场',
+  `description` = '用于验证大规模单淘汰赛程、种子选手、报名审核和赛程维护流程的私人赛事。',
   `reward` = '私人赛事不设置积分，优胜者获得荣誉证书。',
   `thumbnail_url` = '/default-thumbnails/badminton.png'
 WHERE `competition_no` = 'NO.00000026'

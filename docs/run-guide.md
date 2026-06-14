@@ -12,6 +12,20 @@
 | MySQL | 8.0 |
 | 浏览器 | Chrome / Edge |
 
+后端默认使用本机 MySQL 配置，必要时可通过环境变量覆盖：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | 本地开发默认值 | Django 密钥 |
+| `DJANGO_DEBUG` | `true` | 是否开启调试模式 |
+| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | 允许访问的后端域名 |
+| `DJANGO_CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | 允许跨域的前端地址 |
+| `MYSQL_DATABASE` | `lesai_db` | 数据库名 |
+| `MYSQL_USER` | `root` | 数据库用户名 |
+| `MYSQL_PASSWORD` | `s08006172` | 数据库密码 |
+| `MYSQL_HOST` | `127.0.0.1` | 数据库地址 |
+| `MYSQL_PORT` | `3306` | 数据库端口 |
+
 ## 2. 项目路径
 
 ```text
@@ -131,11 +145,3 @@ cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend
 - 重新导入 `database/lesai.sql`。
 - 确认数据库名为 `lesai_db`。
 - 确认后端 settings 中数据库账号密码正确。
-
-## 9. Git 提交示例
-
-```powershell
-git add .
-git commit -m "docs: update final project documentation"
-git push origin dev/zzf
-```

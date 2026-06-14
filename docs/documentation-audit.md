@@ -26,9 +26,12 @@
 | `docs/bracket-design.md` | 单淘汰树、种子、轮空和回滚逻辑 |
 | `docs/test/test-report.md` | 构建检查、Django 检查、功能测试和边界测试 |
 | `database/test-report.md` | 数据库结构、约束和样例数据验证 |
+| `docs/assets/screenshots.md` | 页面截图索引和截图资产说明 |
 | `docs/ui/page-wireframe.md` | 页面路由、页面职责和核心跳转关系 |
 | `docs/ui/ui-style-guide.md` | 视觉规范、组件规范和响应式规范 |
 | `docs/ui/ui-reference.md` | 产品界面参考方向和设计原则 |
+
+归档资料存放在 `docs/archive/`，用于保留早期设计材料；当前实现说明仍以上表中的主文档为准。
 
 ## 3. 文档维护原则
 
