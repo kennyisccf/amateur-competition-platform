@@ -126,7 +126,7 @@ cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend
 - 确认前端运行在 `localhost:5173`。
 - 当前 Axios 使用同源代理/本地配置，开发时需要同时启动前后端。
 
-### 8.3 数据和演示页面不一致
+### 8.3 数据和页面状态不一致
 
 - 重新导入 `database/lesai.sql`。
 - 确认数据库名为 `lesai_db`。
