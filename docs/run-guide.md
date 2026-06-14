@@ -1,89 +1,147 @@
-## 乐赛平台本地运行指南
-本文档介绍如何在本地启动「乐赛一站式全民赛事组织服务平台」的前后端及数据库。
+# 乐赛本地运行指南
 
-# 一、 环境要求
-前端: Node.js (推荐 v18+)
+本文档用于在本机启动「乐赛」前后端和 MySQL 数据库。路径以当前项目机器为准。
 
-后端: Python 3.11
+## 1. 环境要求
 
-数据库: MySQL 8.0
+| 环境 | 建议版本 |
+| --- | --- |
+| Node.js | 18+ |
+| Python | 项目虚拟环境已配置 |
+| Django | 6.0.5 |
+| MySQL | 8.0 |
+| 浏览器 | Chrome / Edge |
 
-# 二、 数据库配置
-1.打开本地 MySQL 数据库工具（如 Navicat 或 DataGrip）。
+后端默认使用本机 MySQL 配置，必要时可通过环境变量覆盖：
 
-2.执行以下命令创建数据库：
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | 本地开发默认值 | Django 密钥 |
+| `DJANGO_DEBUG` | `true` | 是否开启调试模式 |
+| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | 允许访问的后端域名 |
+| `DJANGO_CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | 允许跨域的前端地址 |
+| `MYSQL_DATABASE` | `lesai_db` | 数据库名 |
+| `MYSQL_USER` | `root` | 数据库用户名 |
+| `MYSQL_PASSWORD` | `s08006172` | 数据库密码 |
+| `MYSQL_HOST` | `127.0.0.1` | 数据库地址 |
+| `MYSQL_PORT` | `3306` | 数据库端口 |
 
- SQL
- 
- CREATE DATABASE lesai DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
- 
-3.导入数据库表结构：运行 database/lesai.sql 文件中的 SQL 语句。
+## 2. 项目路径
 
-4.核对配置：确保本地 MySQL 用户名和密码与后端配置文件一致。
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git
+```
 
-# 三、 后端运行 (Django)
+后端：
 
-1.进入后端目录：
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform
+```
 
-cd backend/amateur_competition_platform
+前端：
 
-2.创建并激活虚拟环境（推荐）：
+```text
+C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend
+```
 
-   * 创建虚拟环境：python -m venv venv
-   
-   * Windows 激活: venv\Scripts\activate
+## 3. 数据库初始化
 
-   * Mac/Linux 激活：source venv/bin/activate
+数据库名：`lesai_db`
 
-   
-3.安装依赖包：
+本机 root 密码：`s08006172`
 
-   pip install django djangorestframework djangorestframework-simplejwt django-cors-headers mysqlclient
+完整初始化脚本：
 
-   如果目录下有 requirements.txt，可直接运行以下命令批量安装：
-   
-   pip install -r requirements.txt
-   
-4.配置数据库：
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\lesai.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4"
+```
 
-在 amateur_competition_platform/settings.py 中，找到 DATABASES 配置项，修改为您本地 MySQL 的真实用户名和密码。
+如果只执行升级脚本：
 
-5.数据库迁移（生成表结构）：
+```powershell
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\upgrade_registration_fields.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4" lesai_db
+```
 
-python manage.py makemigrations
+## 4. 启动后端
 
-python manage.py migrate
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe manage.py runserver
+```
 
-6.启动后端服务：
+后端默认地址：
 
-python manage.py runserver
-默认后端访问地址为：http://localhost:8000
+```text
+http://localhost:8000
+```
 
+## 5. 启动前端
 
-# 四、 前端运行 (Vue3 + Vite)
+另开一个 PowerShell：
 
-1.进入前端目录：
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd run dev
+```
 
-cd frontend
+前端默认地址：
 
-2.安装前端项目依赖：
+```text
+http://localhost:5173/
+```
 
-   npm install
-   
-3.启动前端开发服务器：
+## 6. 测试账号
 
-   npm run dev
+所有账号密码均为 `123456`，验证码按登录页显示填写。
 
-     默认前端访问地址为：http://localhost:5173
+| 角色 | 账号 |
+| --- | --- |
+| 管理员 | `admin` |
+| 管理员 | `test_admin` |
+| 主办方 | `org_zs` |
+| 参赛者 | `player_mike` |
+| 参赛者 | `player_jane` |
+| 参赛者 | `player_test` |
 
+## 7. 常用检查命令
 
-   
-# 五、 测试账号
+查看工作区状态：
 
-为方便验收与测试，数据库中已预置以下测试账号（需由测试负责人路良钧初始化）：
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git"
+git status --short
+```
 
-* 选手测试账号: 账号: [待补充] / 密码: [待补充]
+前端生产构建：
 
-* 主办方测试账号: 账号: [待补充] / 密码: [待补充]
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
+npm.cmd run build
+```
 
-* 管理员测试账号: 账号: [待补充] / 密码: [待补充]
+后端系统检查：
+
+```powershell
+cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+.\.venv\Scripts\python.exe manage.py check
+```
+
+## 8. 常见问题
+
+### 8.1 登录失败
+
+- 确认密码为 `123456`。
+- 确认验证码填写的是登录页当前显示值。
+- 确认后端服务已启动。
+
+### 8.2 前端无法请求后端
+
+- 确认后端运行在 `localhost:8000`。
+- 确认前端运行在 `localhost:5173`。
+- 当前 Axios 使用同源代理/本地配置，开发时需要同时启动前后端。
+
+### 8.3 数据和页面状态不一致
+
+- 重新导入 `database/lesai.sql`。
+- 确认数据库名为 `lesai_db`。
+- 确认后端 settings 中数据库账号密码正确。

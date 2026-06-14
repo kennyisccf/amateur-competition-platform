@@ -115,7 +115,7 @@ def manageable_registrations(user):
         return registrations
     return registrations.filter(competition__organizer=user)
 
-DEMO_LOCAL_TZ = timezone.get_fixed_timezone(8 * 60)
+LOCAL_TZ = timezone.get_fixed_timezone(8 * 60)
 
 def parse_request_datetime(value):
     if not value:
@@ -141,9 +141,9 @@ def validate_competition_time(start_time, end_time):
     end_dt = parse_request_datetime(end_time)
     if not start_dt or not end_dt:
         return None, None, "请选择比赛开始和结束时间"
-    today = timezone.localtime(timezone.now(), DEMO_LOCAL_TZ).date()
-    start_day = timezone.localtime(start_dt, DEMO_LOCAL_TZ).date()
-    end_day = timezone.localtime(end_dt, DEMO_LOCAL_TZ).date()
+    today = timezone.localtime(timezone.now(), LOCAL_TZ).date()
+    start_day = timezone.localtime(start_dt, LOCAL_TZ).date()
+    end_day = timezone.localtime(end_dt, LOCAL_TZ).date()
     if start_day < today or end_day < today:
         return None, None, "比赛日期不能早于今天"
     if end_dt <= start_dt:
@@ -1703,7 +1703,7 @@ def admin_bulk_create_competitions(request):
             title=f"测试{category}单淘汰赛{index + 1:02d}",
             category=category,
             location=random.choice(locations),
-            description="test_admin 批量生成的演示赛事",
+            description="test_admin 批量生成的样例赛事",
             type=c_type,
             organizer=request.current_user,
             status=1,

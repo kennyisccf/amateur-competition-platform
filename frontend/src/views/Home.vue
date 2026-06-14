@@ -4,7 +4,7 @@
       <div class="hero-copy">
         <p class="eyebrow">赛事大厅</p>
         <h2>发现、报名和收藏校园赛事</h2>
-        <p>按运动类型、报名状态和热度筛选赛事，收藏感兴趣的比赛，演示时也能快速回到重点赛事。</p>
+        <p>按运动类型、报名状态和热度筛选赛事，收藏感兴趣的比赛，随时快速回到重点赛事。</p>
       </div>
       <div class="hero-actions">
         <el-button type="primary" @click="router.push('/create')">发起赛事</el-button>
