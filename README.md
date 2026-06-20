@@ -83,6 +83,8 @@
 | [测试报告](docs/test/test-report.md) | 构建、Django check、功能测试和边界测试 |
 | [界面截图](docs/assets/screenshots.md) | 登录、注册、赛事大厅、工作台、淘汰树等页面截图 |
 | [文档审查](docs/documentation-audit.md) | 已有文档盘点与最终文档说明 |
+| [最终文档](docs/final-submission/README.md) | 最终版 PDF、可编辑源文件、演示 PPT 与产品视频 |
+| [历史设计资料](docs/archive/README.md) | 保留中文原名的早期设计与测试资料 |
 
 ## 完整执行指南
 
@@ -110,13 +112,13 @@ git status --short
 本机数据库初始化命令：
 
 ```powershell
-Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\lesai.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4"
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\lesai.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p "--default-character-set=utf8mb4"
 ```
 
 如果数据库已存在，只需要执行升级脚本：
 
 ```powershell
-Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\upgrade_registration_fields.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root "-ps08006172" "--default-character-set=utf8mb4" lesai_db
+Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\database\upgrade_registration_fields.sql" | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p "--default-character-set=utf8mb4" lesai_db
 ```
 
 ### 3. 安装依赖
@@ -125,6 +127,7 @@ Get-Content -Raw -Encoding UTF8 "C:\Users\kenny\Desktop\軟件工程\amateur-com
 
 ```powershell
 cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 ```
 
@@ -132,7 +135,7 @@ cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend
 
 ```powershell
 cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\frontend"
-npm.cmd install
+npm.cmd ci
 ```
 
 ### 4. 启动后端
@@ -141,6 +144,8 @@ npm.cmd install
 
 ```powershell
 cd "C:\Users\kenny\Desktop\軟件工程\amateur-competition-platform-git\backend\amateur_competition_platform"
+$securePassword = Read-Host "MySQL password" -AsSecureString
+$env:MYSQL_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
